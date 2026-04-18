@@ -1,0 +1,113 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.rightcode.fen52">
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!--  TODO: 저장소 권한 필요 시 주석 해제하여 사용  -->
+    <!-- Android 12 버전 이하에서 Storage 읽기 권한 -->
+<!--    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />-->
+    <!--    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />-->
+
+    <!--  TODO: 저장소 권한 필요 시 주석 해제하여 사용  -->
+    <!--  Android 13 버전 이상에서 Storage 읽기 권한  -->
+    <!--    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />-->
+    <!--    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />-->
+    <!--    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />-->
+
+    <!--  TODO: FCM 사용 시 주석 해제하여 사용  -->
+    <!--  파이어베이스 필요 권한  -->
+    <!--    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />-->
+    <!--    <uses-permission android:name="android.permission.VIBRATE" />-->
+    <!--    <uses-permission android:name="android.permission.WAKE_LOCK" />-->
+    <!--    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />-->
+
+    <!--  위치 권한  -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!--  URL Launcher 설정  -->
+    <queries>
+        <!-- If your app checks for SMS support -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="sms"/>
+        </intent>
+        <!-- If your app checks for call support -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <!-- If your application checks for inAppBrowserView launch mode support -->
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService"/>
+        </intent>
+    </queries>
+
+
+    <!--  TODO: FCM 사용 시 주석 해제한 후, 해당 주석 바로 하단 <application> 태그를 대체하여 사용  -->
+    <!--
+        <application
+                android:name="${applicationName}"
+                android:icon="@mipmap/ic_launcher"
+                android:label="Skin52"
+                android:usesCleartextTraffic="true"
+                android:showWhenLocked="true"
+                android:turnScreenOn="true"
+        >
+    -->
+    <application
+            android:name="${applicationName}"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Fen52"
+            android:usesCleartextTraffic="true"
+    >
+        <activity
+                android:name=".MainActivity"
+                android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                android:exported="true"
+                android:hardwareAccelerated="true"
+                android:launchMode="singleTop"
+                android:theme="@style/LaunchTheme"
+                android:windowSoftInputMode="adjustResize">
+
+            <!--     TODO: FCM 사용 시 주석 해제하여 사용       -->
+            <!--      FCM 사용 설정      -->
+            <!--            <meta-data-->
+            <!--                    android:name="com.google.firebase.messaging.default_notification_channel_id"-->
+            <!--                    android:value="high_importance_channel"/>-->
+            <!--            <intent-filter>-->
+            <!--                <action android:name="FLUTTER_NOTIFICATION_CLICK"/>-->
+            <!--                <category android:name="android.intent.category.DEFAULT"/>-->
+            <!--            </intent-filter>-->
+
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+                    android:name="io.flutter.embedding.android.NormalTheme"
+                    android:resource="@style/NormalTheme"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!--     Deep Links      -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <!-- Accepts URIs that begin with YOUR_SCHEME://YOUR_HOST -->
+                <data
+                        android:host="main"
+                        android:scheme="boiler"/>
+            </intent-filter>
+        </activity>
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+                android:name="flutterEmbedding"
+                android:value="2"/>
+    </application>
+</manifest>

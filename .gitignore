@@ -1,0 +1,11 @@
+.dart_tool/
+build/
+*.apk
+*.dill
+.idea/
+
+# generated files 제외
+*.g.dart
+
+# FVM Version Cache
+.fvm/
