@@ -29,6 +29,7 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp> {
   void dispose() {
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     _game.timeLabel.dispose();
+    _game.moneyLabel.dispose();
     super.dispose();
   }
 
@@ -125,6 +126,44 @@ class _RestStopHome extends StatelessWidget {
               ),
             ),
           ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showArrivalScheduleDialog(context, game),
+                  child: ValueListenableBuilder<String>(
+                    valueListenable: game.moneyLabel,
+                    builder: (context, value, _) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xCC1E1A16),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0x66F0D69A),
+                          ),
+                        ),
+                        child: Text(
+                          value,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -160,6 +199,65 @@ class _RestStopHome extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _showArrivalScheduleDialog(
+    BuildContext context,
+    HighwayTycoonGame game,
+  ) {
+    final schedule = game.todayArrivalSchedule;
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2218),
+          title: const Text(
+            '오늘 유입 일정',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: schedule.isEmpty
+                ? const Text(
+                    '오늘 남은 유입 일정이 없습니다.',
+                    style: TextStyle(
+                      color: Color(0xFFE7D7B7),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: schedule
+                          .map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                item,
+                                style: const TextStyle(
+                                  color: Color(0xFFE7D7B7),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('닫기'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -202,7 +300,7 @@ class _ConstructionScreenState extends State<ConstructionScreen> {
       '건어물',
     ],
     '편의시설': [],
-    '특수시설': [],
+    '특수시설': ['주차'],
   };
 
   static const Map<String, String> _descriptions = {
@@ -223,6 +321,7 @@ class _ConstructionScreenState extends State<ConstructionScreen> {
     '카페': '음료와 휴식 수요를 함께 잡는 기본 카페 매장 예시입니다.',
     '빵집': '간단한 식사 대체 수요까지 흡수하는 베이커리 예시입니다.',
     '건어물': '지역 특산 간식 판매 코너 예시입니다.',
+    '주차': '추가 주차 공간을 운영하는 특수시설 예시입니다.',
   };
 
   String _selectedCategory = _categories.first;

@@ -24,7 +24,9 @@ class HighwayTycoonGame extends FlameGame {
   static const double tileHalfHeight = 22;
   static const double cameraMargin = 80;
   static const double vehicleSpacing = 18;
-  static const int realSecondsPerGameYear = 172800;
+  static const double pedestrianSideOffset = 8;
+  static const double pedestrianSpawnJitter = 4;
+  static const int realSecondsPerGameYear = 129600;
   static const int gameMinutesPerYear = 12 * 30 * 24 * 60;
   static const double gameMinutesPerRealSecond =
       gameMinutesPerYear / realSecondsPerGameYear;
@@ -35,17 +37,91 @@ class HighwayTycoonGame extends FlameGame {
   static const Set<int> treeTileNumbers = {2201, 2227, 2252};
 
   final List<MapTile> _tiles = [];
+  final Set<int> _treeTileNumbers = <int>{};
   final Map<int, PlacedTileData> _placedTiles = {};
   final Map<int, MapTile> _tileByNumber = {};
   final Map<String, _SpecialLabelPainters> _specialLabelPainterCache = {};
   final List<MovingVehicle> _vehicles = [];
+  final List<WalkingPerson> _people = [];
   final List<DailyArrival> _dailyArrivals = [];
   final List<ParkingSlot> _parkingSlots = [
     ParkingSlot(spotTileNumber: 2092, approachTileNumber: 2063),
     ParkingSlot(spotTileNumber: 2121, approachTileNumber: 2093),
   ];
+  static const int startingMoney = 20000;
+  static const Map<String, int> buildCosts = {
+    '라면': 500,
+    '돈까스': 800,
+    '국밥': 650,
+    '비빔밥': 600,
+    '김치찌개': 700,
+    '제육볶음': 900,
+    '불고기': 900,
+    '설렁탕': 800,
+    '백반': 1000,
+    '주차': 200,
+  };
+  static const Map<String, RestaurantSpec> restaurantSpecs = {
+    '라면': RestaurantSpec(
+      cost: 500,
+      sedanRange: VehicleDemandRange(min: 1.0, max: 2.0),
+      truckRange: VehicleDemandRange(min: 0.4, max: 1.0),
+      busRange: VehicleDemandRange(min: 0.1, max: 0.1),
+    ),
+    '돈까스': RestaurantSpec(
+      cost: 800,
+      sedanRange: VehicleDemandRange(min: 1.0, max: 4.0),
+      truckRange: VehicleDemandRange(min: 1.0, max: 1.6),
+      busRange: VehicleDemandRange(min: 0.1, max: 0.1),
+    ),
+    '국밥': RestaurantSpec(
+      cost: 650,
+      sedanRange: VehicleDemandRange(min: 1.0, max: 2.0),
+      truckRange: VehicleDemandRange(min: 0.4, max: 1.0),
+      busRange: VehicleDemandRange(min: 0.1, max: 0.1),
+    ),
+    '비빔밥': RestaurantSpec(
+      cost: 600,
+      sedanRange: VehicleDemandRange(min: 1.0, max: 2.0),
+      truckRange: VehicleDemandRange(min: 0.4, max: 1.0),
+      busRange: VehicleDemandRange(min: 0.1, max: 0.1),
+    ),
+    '김치찌개': RestaurantSpec(
+      cost: 700,
+      sedanRange: VehicleDemandRange(min: 0.0, max: 4.0),
+      truckRange: VehicleDemandRange(min: 1.0, max: 2.0),
+      busRange: VehicleDemandRange(min: 0.0, max: 0.1),
+    ),
+    '제육볶음': RestaurantSpec(
+      cost: 900,
+      sedanRange: VehicleDemandRange(min: 1.4, max: 2.4),
+      truckRange: VehicleDemandRange(min: 1.0, max: 3.0),
+      busRange: VehicleDemandRange(min: 0.0, max: 0.2),
+    ),
+    '불고기': RestaurantSpec(
+      cost: 900,
+      sedanRange: VehicleDemandRange(min: 0.0, max: 4.0),
+      truckRange: VehicleDemandRange(min: 0.4, max: 1.4),
+      busRange: VehicleDemandRange(min: 0.04, max: 0.08),
+    ),
+    '설렁탕': RestaurantSpec(
+      cost: 800,
+      sedanRange: VehicleDemandRange(min: 0.4, max: 1.0),
+      truckRange: VehicleDemandRange(min: 0.4, max: 4.0),
+      busRange: VehicleDemandRange(min: 0.0, max: 0.1),
+    ),
+    '백반': RestaurantSpec(
+      cost: 1000,
+      sedanRange: VehicleDemandRange(min: 0.4, max: 2.0),
+      truckRange: VehicleDemandRange(min: 2.0, max: 4.0),
+      busRange: VehicleDemandRange(min: 0.1, max: 0.1),
+    ),
+  };
   final ValueNotifier<String> timeLabel = ValueNotifier<String>(
     _formatGameTime(startingGameMinutes),
+  );
+  final ValueNotifier<String> moneyLabel = ValueNotifier<String>(
+    _formatMoney(startingMoney),
   );
   final math.Random _random = math.Random();
 
@@ -54,7 +130,11 @@ class HighwayTycoonGame extends FlameGame {
   double _zoom = 1.0;
   String? _pendingPlacementName;
   double _elapsedGameMinutes = startingGameMinutes.toDouble();
+  double _previousElapsedGameMinutes = startingGameMinutes.toDouble();
   int _currentTrafficDay = -1;
+  int _money = startingMoney;
+  int _nextVehicleId = 1;
+  int _nextPersonId = 1;
 
   @override
   Color backgroundColor() => const Color(0xFF698553);
@@ -63,7 +143,6 @@ class HighwayTycoonGame extends FlameGame {
   FutureOr<void> onLoad() {
     _buildTileMap();
     _rebuildTrafficPlan(force: true);
-    _spawnScheduledVehicles();
   }
 
   @override
@@ -97,12 +176,14 @@ class HighwayTycoonGame extends FlameGame {
     canvas.scale(_zoom);
     canvas.translate(-_cameraCenter.dx, -_cameraCenter.dy);
     _drawTileMap(canvas);
+    _drawPeople(canvas);
     canvas.restore();
   }
 
   @override
   void update(double dt) {
     super.update(dt);
+    _previousElapsedGameMinutes = _elapsedGameMinutes;
     _elapsedGameMinutes += dt * gameMinutesPerRealSecond;
     final snappedMinutes = ((_elapsedGameMinutes ~/ 10) * 10);
     final nextLabel = _formatGameTime(snappedMinutes);
@@ -111,8 +192,12 @@ class HighwayTycoonGame extends FlameGame {
     }
 
     _rebuildTrafficPlan();
-    _spawnScheduledVehicles();
+    _spawnScheduledVehicles(
+      windowStartMinute: _previousElapsedGameMinutes,
+      windowEndMinute: _elapsedGameMinutes,
+    );
     _updateVehicles(dt);
+    _updatePeople(dt);
     _promoteQueuedVehicles();
   }
 
@@ -152,6 +237,24 @@ class HighwayTycoonGame extends FlameGame {
     _pendingPlacementName = itemName;
   }
 
+  List<String> get todayArrivalSchedule {
+    if (_dailyArrivals.isEmpty) {
+      return const <String>[];
+    }
+
+    final today = (_elapsedGameMinutes ~/ gameMinutesPerDay).toInt();
+    return _dailyArrivals
+        .where(
+          (arrival) =>
+              (arrival.spawnMinute ~/ gameMinutesPerDay).toInt() == today,
+        )
+        .map(
+          (arrival) =>
+              '${_formatClockOnly(arrival.spawnMinute)} ${arrival.type.label}',
+        )
+        .toList(growable: false);
+  }
+
   void handleTap(Offset screenPoint) {
     if (_pendingPlacementName == null) {
       return;
@@ -162,15 +265,37 @@ class HighwayTycoonGame extends FlameGame {
       return;
     }
 
-    final worldPoint = _screenToWorld(screenPoint, _zoom);
-    if (!targetTile.path.contains(worldPoint)) {
+    final footprint =
+        _placementFootprintFor(targetTile, _pendingPlacementName!);
+    if (footprint == null) {
       return;
     }
 
-    _placedTiles[targetTile.tileNumber] = PlacedTileData(
-      label: _pendingPlacementName!,
-      backgroundColor: const Color(0xFF111111),
-    );
+    final worldPoint = _screenToWorld(screenPoint, _zoom);
+    final tappedPlacementTile = footprint
+        .map((tileNumber) => _tileByNumber[tileNumber]!)
+        .any((tile) => tile.path.contains(worldPoint));
+    if (!tappedPlacementTile) {
+      return;
+    }
+
+    final buildCost = buildCosts[_pendingPlacementName!];
+    if (buildCost != null && _money < buildCost) {
+      return;
+    }
+
+    for (var i = 0; i < footprint.length; i++) {
+      final tileNumber = footprint[i];
+      _placedTiles[tileNumber] = PlacedTileData(
+        label: _pendingPlacementName!,
+        backgroundColor: const Color(0xFF111111),
+        showLabel: i == 0,
+      );
+    }
+    if (buildCost != null) {
+      _money -= buildCost;
+      moneyLabel.value = _formatMoney(_money);
+    }
     _pendingPlacementName = null;
   }
 
@@ -198,6 +323,42 @@ class HighwayTycoonGame extends FlameGame {
     _tileByNumber
       ..clear()
       ..addEntries(_tiles.map((tile) => MapEntry(tile.tileNumber, tile)));
+
+    _treeTileNumbers
+      ..clear()
+      ..addAll(treeTileNumbers)
+      ..addAll(
+        _tiles
+            .where(
+              (tile) =>
+                  tile.zone == TileZone.commercial && tile.tileNumber < 1930,
+            )
+            .map((tile) => tile.tileNumber),
+      )
+      ..addAll(
+        _tiles
+            .where(
+              (tile) =>
+                  ((tile.logicalX == 31 || tile.logicalX == 32) &&
+                      tile.logicalY >= 41) ||
+                  ((tile.logicalX == 28 ||
+                          tile.logicalX == 29 ||
+                          tile.logicalX == 30) &&
+                      tile.logicalY >= 40),
+            )
+            .map((tile) => tile.tileNumber),
+      );
+
+    _treeTileNumbers.removeAll({
+      for (var tileNumber = 1995; tileNumber <= 2226; tileNumber++) tileNumber,
+      for (var tileNumber = 2026; tileNumber <= 2251; tileNumber++) tileNumber,
+      for (var tileNumber = 2056; tileNumber <= 2275; tileNumber++) tileNumber,
+    });
+    _treeTileNumbers.addAll(
+      _tiles
+          .where((tile) => tile.logicalX == 30 && tile.logicalY >= 41)
+          .map((tile) => tile.tileNumber),
+    );
 
     _worldBounds = _computeWorldBounds();
     _cameraCenter = _tileByNumber[2147]?.center ?? _worldBounds.center;
@@ -310,6 +471,11 @@ class HighwayTycoonGame extends FlameGame {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     final placementTile = _currentPlacementTile;
+    final placementFootprint =
+        placementTile == null || _pendingPlacementName == null
+            ? const <int>{}
+            : _placementFootprintFor(placementTile, _pendingPlacementName!)!
+                .toSet();
 
     for (final tile in _tiles) {
       if (!tile.bounds.overlaps(drawViewport)) {
@@ -318,7 +484,7 @@ class HighwayTycoonGame extends FlameGame {
 
       canvas.drawPath(tile.path, Paint()..color = _tileColor(tile));
       canvas.drawPath(tile.path, borderPaint);
-      if (placementTile?.tileNumber == tile.tileNumber) {
+      if (placementFootprint.contains(tile.tileNumber)) {
         canvas.drawPath(
           tile.path,
           Paint()..color = const Color(0xFF808080),
@@ -328,7 +494,7 @@ class HighwayTycoonGame extends FlameGame {
 
       final placedData = _placedTiles[tile.tileNumber];
       final specialLabel = _specialLabelFor(tile);
-      if (placedData != null) {
+      if (placedData != null && placedData.showLabel) {
         _drawSpecialLabel(
           canvas,
           tile,
@@ -367,6 +533,58 @@ class HighwayTycoonGame extends FlameGame {
           ..strokeWidth = 1.2,
       );
     }
+  }
+
+  void _drawPeople(Canvas canvas) {
+    for (final person in _people) {
+      final fillPaint = Paint()..color = person.type.color;
+      final outlinePaint = Paint()
+        ..color = const Color(0xFF171717)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+      final center = person.position;
+
+      switch (person.type.shape) {
+        case PersonShape.circle:
+          canvas.drawCircle(center, 5, fillPaint);
+          canvas.drawCircle(center, 5, outlinePaint);
+        case PersonShape.triangle:
+          final path = Path()
+            ..moveTo(center.dx, center.dy - 6)
+            ..lineTo(center.dx + 5, center.dy + 4)
+            ..lineTo(center.dx - 5, center.dy + 4)
+            ..close();
+          canvas.drawPath(path, fillPaint);
+          canvas.drawPath(path, outlinePaint);
+        case PersonShape.square:
+          final rect = Rect.fromCenter(center: center, width: 10, height: 10);
+          canvas.drawRect(rect, fillPaint);
+          canvas.drawRect(rect, outlinePaint);
+        case PersonShape.star:
+          final path = _buildStarPath(center, 6, 3);
+          canvas.drawPath(path, fillPaint);
+          canvas.drawPath(path, outlinePaint);
+      }
+    }
+  }
+
+  Path _buildStarPath(Offset center, double outerRadius, double innerRadius) {
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final angle = (-math.pi / 2) + (i * math.pi / 5);
+      final radius = i.isEven ? outerRadius : innerRadius;
+      final point = Offset(
+        center.dx + math.cos(angle) * radius,
+        center.dy + math.sin(angle) * radius,
+      );
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+    return path;
   }
 
   void _drawTileLabel(Canvas canvas, MapTile tile) {
@@ -461,7 +679,7 @@ class HighwayTycoonGame extends FlameGame {
     if (placedData != null) {
       return placedData.backgroundColor;
     }
-    if (treeTileNumbers.contains(tile.tileNumber)) {
+    if (_treeTileNumbers.contains(tile.tileNumber)) {
       return const Color(0xFF2F7A3C);
     }
     if (_specialLabelFor(tile) != null) {
@@ -474,7 +692,7 @@ class HighwayTycoonGame extends FlameGame {
   }
 
   String? _specialLabelFor(MapTile tile) {
-    if (treeTileNumbers.contains(tile.tileNumber)) {
+    if (_treeTileNumbers.contains(tile.tileNumber)) {
       return '나무';
     }
     if (restroomTileNumbers.contains(tile.tileNumber)) {
@@ -491,14 +709,14 @@ class HighwayTycoonGame extends FlameGame {
       return null;
     }
 
+    final targetZone = _placementZoneFor(_pendingPlacementName!);
     MapTile? best;
     var bestDistance = double.infinity;
     for (final tile in _tiles) {
-      if (tile.zone != TileZone.commercial) {
+      if (tile.zone != targetZone) {
         continue;
       }
-      if (_specialLabelFor(tile) != null ||
-          _placedTiles.containsKey(tile.tileNumber)) {
+      if (_placementFootprintFor(tile, _pendingPlacementName!) == null) {
         continue;
       }
 
@@ -509,6 +727,63 @@ class HighwayTycoonGame extends FlameGame {
       }
     }
     return best;
+  }
+
+  List<int>? _placementFootprintFor(MapTile anchorTile, String itemName) {
+    if (_specialLabelFor(anchorTile) != null ||
+        _placedTiles.containsKey(anchorTile.tileNumber)) {
+      return null;
+    }
+
+    if (_isParkingFacility(itemName)) {
+      if (anchorTile.zone != TileZone.parking) {
+        return null;
+      }
+      return [anchorTile.tileNumber];
+    }
+
+    if (!_isRestaurant(itemName)) {
+      return [anchorTile.tileNumber];
+    }
+
+    final footprint = <int>[];
+    for (var dy = 0; dy <= 1; dy++) {
+      final tile = _tileAt(
+        logicalX: anchorTile.logicalX,
+        logicalY: anchorTile.logicalY + dy,
+      );
+      if (tile == null ||
+          tile.zone != TileZone.commercial ||
+          _specialLabelFor(tile) != null ||
+          _placedTiles.containsKey(tile.tileNumber)) {
+        return null;
+      }
+      footprint.add(tile.tileNumber);
+    }
+    return footprint;
+  }
+
+  bool _isRestaurant(String itemName) => restaurantSpecs.containsKey(itemName);
+
+  bool _isParkingFacility(String itemName) => itemName == '주차';
+
+  TileZone _placementZoneFor(String itemName) {
+    if (_isParkingFacility(itemName)) {
+      return TileZone.parking;
+    }
+    return TileZone.commercial;
+  }
+
+  MapTile? _tileAt({
+    required int logicalX,
+    required int logicalY,
+  }) {
+    for (final tile in _tiles) {
+      if (tile.logicalX == logicalX && tile.logicalY == logicalY) {
+        return tile;
+      }
+    }
+    return null;
   }
 
   void _rebuildTrafficPlan({bool force = false}) {
@@ -536,6 +811,9 @@ class HighwayTycoonGame extends FlameGame {
         final segmentStart = dayStartMinute + (segmentLength * i);
         final spawnMinute =
             segmentStart + (_random.nextDouble() * segmentLength);
+        if (spawnMinute <= _elapsedGameMinutes) {
+          continue;
+        }
         arrivals.add(
           DailyArrival(
             type: type,
@@ -554,61 +832,43 @@ class HighwayTycoonGame extends FlameGame {
     switch (type) {
       case VehicleType.sedan:
         return VehicleDemandRange(
-          min: 8 + modifier,
-          max: 10 + (modifier * 1.3),
+          min: 12 + modifier.min,
+          max: 15 + modifier.max,
         );
       case VehicleType.truck:
         return VehicleDemandRange(
-          min: 1 + (modifier * 0.2),
-          max: 3 + (modifier * 0.6),
+          min: 1.5 + modifier.min,
+          max: 4.5 + modifier.max,
         );
       case VehicleType.bus:
         return VehicleDemandRange(
-          min: 0,
-          max: 0.5 + (modifier * 0.15),
+          min: modifier.min,
+          max: 0.75 + modifier.max,
         );
     }
   }
 
-  double _buildingModifierFor(VehicleType type) {
-    var modifier = 0.0;
+  VehicleDemandRange _buildingModifierFor(VehicleType type) {
+    var minModifier = 0.0;
+    var maxModifier = 0.0;
     for (final placed in _placedTiles.values) {
-      switch (type) {
-        case VehicleType.sedan:
-          if (const {
-            '카페',
-            '빵집',
-            '핫도그',
-            '떡볶이',
-            '닭강정',
-            '호두과자',
-            '감자/옥수수',
-            '라면',
-          }.contains(placed.label)) {
-            modifier += 0.25;
-          }
-        case VehicleType.truck:
-          if (const {
-            '국밥',
-            '백반',
-            '설렁탕',
-            '불고기',
-            '제육볶음',
-          }.contains(placed.label)) {
-            modifier += 0.18;
-          }
-        case VehicleType.bus:
-          if (const {
-            '화장실',
-            '백반',
-            '국밥',
-            '불고기',
-          }.contains(placed.label)) {
-            modifier += 0.12;
-          }
+      if (!placed.showLabel) {
+        continue;
       }
+      final spec = restaurantSpecs[placed.label];
+      if (spec == null) {
+        continue;
+      }
+
+      final range = switch (type) {
+        VehicleType.sedan => spec.sedanRange,
+        VehicleType.truck => spec.truckRange,
+        VehicleType.bus => spec.busRange,
+      };
+      minModifier += range.min;
+      maxModifier += range.max;
     }
-    return modifier;
+    return VehicleDemandRange(min: minModifier, max: maxModifier);
   }
 
   int _randomizedCount(VehicleDemandRange range) {
@@ -623,19 +883,33 @@ class HighwayTycoonGame extends FlameGame {
     return _random.nextDouble() < fraction ? lower + 1 : lower;
   }
 
-  void _spawnScheduledVehicles() {
+  void _spawnScheduledVehicles({
+    required double windowStartMinute,
+    required double windowEndMinute,
+  }) {
     while (_dailyArrivals.isNotEmpty &&
-        _dailyArrivals.first.spawnMinute <= _elapsedGameMinutes) {
-      final arrival = _dailyArrivals.removeAt(0);
-      if (!_spawnVehicle(arrival.type)) {
-        _dailyArrivals.add(
-          DailyArrival(
-            type: arrival.type,
-            spawnMinute: _elapsedGameMinutes + 5,
-          ),
-        );
-        _dailyArrivals.sort((a, b) => a.spawnMinute.compareTo(b.spawnMinute));
-      }
+        _dailyArrivals.first.spawnMinute <= windowStartMinute) {
+      _dailyArrivals.removeAt(0);
+    }
+
+    if (_dailyArrivals.isEmpty) {
+      return;
+    }
+
+    final arrival = _dailyArrivals.first;
+    if (arrival.spawnMinute > windowEndMinute) {
+      return;
+    }
+
+    _dailyArrivals.removeAt(0);
+    if (!_spawnVehicle(arrival.type)) {
+      _dailyArrivals.add(
+        DailyArrival(
+          type: arrival.type,
+          spawnMinute: _elapsedGameMinutes + 5,
+        ),
+      );
+      _dailyArrivals.sort((a, b) => a.spawnMinute.compareTo(b.spawnMinute));
     }
   }
 
@@ -647,6 +921,7 @@ class HighwayTycoonGame extends FlameGame {
         return false;
       }
       final vehicle = MovingVehicle(
+        id: _nextVehicleId++,
         type: type,
         position: route.first,
         route: route.sublist(1),
@@ -673,6 +948,7 @@ class HighwayTycoonGame extends FlameGame {
         return false;
       }
       final vehicle = MovingVehicle(
+        id: _nextVehicleId++,
         type: type,
         position: route.first,
         route: route.sublist(1),
@@ -693,6 +969,7 @@ class HighwayTycoonGame extends FlameGame {
     }
     _vehicles.add(
       MovingVehicle(
+        id: _nextVehicleId++,
         type: type,
         position: throughRoute.first,
         route: throughRoute.sublist(1),
@@ -711,6 +988,7 @@ class HighwayTycoonGame extends FlameGame {
     for (final vehicle in _vehicles) {
       if (vehicle.state == VehicleState.parked) {
         if (_elapsedGameMinutes >= vehicle.parkUntilMinute) {
+          _people.removeWhere((person) => person.vehicleId == vehicle.id);
           vehicle.route = _exitRouteFor(vehicle.parkingSlot!);
           vehicle.state = VehicleState.exiting;
           vehicle.parkingSlot!.occupiedBy = null;
@@ -723,9 +1001,10 @@ class HighwayTycoonGame extends FlameGame {
       if (vehicle.route.isEmpty) {
         if (vehicle.state == VehicleState.arriving) {
           vehicle.state = VehicleState.parked;
-          vehicle.parkUntilMinute = _elapsedGameMinutes + 60;
+          vehicle.parkUntilMinute = _elapsedGameMinutes + 120;
           vehicle.parkingSlot!.occupiedBy = vehicle;
           vehicle.parkingSlot!.reservedBy = null;
+          _spawnPeopleForVehicle(vehicle);
         } else if (vehicle.state == VehicleState.exiting ||
             vehicle.state == VehicleState.passingThrough) {
           completed.add(vehicle);
@@ -752,7 +1031,265 @@ class HighwayTycoonGame extends FlameGame {
 
     for (final vehicle in completed) {
       _vehicles.remove(vehicle);
+      _people.removeWhere((person) => person.vehicleId == vehicle.id);
     }
+  }
+
+  void _updatePeople(double dt) {
+    final completed = <WalkingPerson>[];
+    for (final person in _people) {
+      if (person.state == PersonState.dwell) {
+        if (_elapsedGameMinutes >= person.dwellUntilMinute) {
+          person.state = PersonState.returning;
+          person.route = List<Offset>.from(person.returnRoute);
+        }
+        continue;
+      }
+
+      if (person.route.isEmpty) {
+        if (person.state == PersonState.outbound) {
+          person.state = PersonState.dwell;
+          person.dwellUntilMinute = _elapsedGameMinutes + person.visitMinutes;
+        } else {
+          completed.add(person);
+        }
+        continue;
+      }
+
+      final target = person.route.first;
+      final delta = target - person.position;
+      final maxStep = person.speed * dt;
+      if (delta.distance <= maxStep) {
+        person.position = target;
+        person.route.removeAt(0);
+      } else {
+        person.position = person.position + (delta / delta.distance) * maxStep;
+      }
+    }
+
+    for (final person in completed) {
+      _people.remove(person);
+    }
+  }
+
+  void _spawnPeopleForVehicle(MovingVehicle vehicle) {
+    final slot = vehicle.parkingSlot;
+    if (slot == null) {
+      return;
+    }
+
+    final destination = _pickWalkingDestinationTile(slot.spotTileNumber);
+    if (destination == null) {
+      return;
+    }
+
+    final pathToDestination = _findPedestrianRouteToCommercial(
+      startTileNumber: slot.spotTileNumber,
+      targetTileNumber: destination,
+    );
+    if (pathToDestination == null || pathToDestination.length < 2) {
+      return;
+    }
+
+    final peopleCount = _passengerCountFor(vehicle.type);
+    final availableTypes = _availablePersonTypes(vehicle.type);
+    for (var i = 0; i < peopleCount; i++) {
+      final personType = availableTypes[_random.nextInt(availableTypes.length)];
+      final startPosition = _tileCenterByNumber(slot.spotTileNumber) +
+          Offset(
+            (_random.nextDouble() * pedestrianSpawnJitter * 2) -
+                pedestrianSpawnJitter,
+            (_random.nextDouble() * pedestrianSpawnJitter * 2) -
+                pedestrianSpawnJitter,
+          );
+      final outboundRoute = _offsetPedestrianRoute(pathToDestination);
+      final returnRoute =
+          _offsetPedestrianRoute(pathToDestination.reversed.toList());
+      _people.add(
+        WalkingPerson(
+          id: _nextPersonId++,
+          vehicleId: vehicle.id,
+          type: personType,
+          position: startPosition,
+          route: List<Offset>.from(outboundRoute),
+          returnRoute: returnRoute,
+          state: PersonState.outbound,
+          visitMinutes: 20 + _random.nextInt(61),
+          dwellUntilMinute: 0,
+          speed: 34 + (_random.nextDouble() * 10),
+        ),
+      );
+    }
+  }
+
+  int? _pickWalkingDestinationTile(int startTileNumber) {
+    final startTile = _tileByNumber[startTileNumber];
+    if (startTile == null) {
+      return null;
+    }
+
+    final queue = <int>[startTileNumber];
+    final visited = <int>{startTileNumber};
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      final currentTile = _tileByNumber[current]!;
+      for (final neighbor in _neighborTileNumbers(currentTile)) {
+        if (!visited.add(neighbor)) {
+          continue;
+        }
+
+        if (_isPedestrianCommercialTile(neighbor)) {
+          return neighbor;
+        }
+
+        final neighborTile = _tileByNumber[neighbor];
+        if (neighborTile?.zone == TileZone.parking) {
+          queue.add(neighbor);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  int _passengerCountFor(VehicleType type) {
+    switch (type) {
+      case VehicleType.sedan:
+        final roll = _random.nextDouble();
+        if (roll < 0.55) return 1;
+        if (roll < 0.82) return 2;
+        if (roll < 0.95) return 3;
+        return 4;
+      case VehicleType.truck:
+        return _random.nextDouble() < 0.8 ? 1 : 2;
+      case VehicleType.bus:
+        return 8 + _random.nextInt(8);
+    }
+  }
+
+  List<PersonType> _availablePersonTypes(VehicleType type) {
+    switch (type) {
+      case VehicleType.truck:
+        return const [PersonType.man, PersonType.woman];
+      case VehicleType.sedan:
+      case VehicleType.bus:
+        return PersonType.values;
+    }
+  }
+
+  List<int>? _findPedestrianRouteToCommercial({
+    required int startTileNumber,
+    required int targetTileNumber,
+  }) {
+    final startTile = _tileByNumber[startTileNumber];
+    final targetTile = _tileByNumber[targetTileNumber];
+    if (startTile == null || targetTile == null) {
+      return null;
+    }
+
+    final queue = <int>[startTileNumber];
+    final previous = <int, int?>{startTileNumber: null};
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      if (current == targetTileNumber) {
+        break;
+      }
+
+      final currentTile = _tileByNumber[current]!;
+      for (final neighbor in _neighborTileNumbers(currentTile)) {
+        if (previous.containsKey(neighbor)) {
+          continue;
+        }
+        if (!_isPedestrianEntryPassable(neighbor, targetTileNumber)) {
+          continue;
+        }
+        previous[neighbor] = current;
+        queue.add(neighbor);
+      }
+    }
+
+    if (!previous.containsKey(targetTileNumber)) {
+      return null;
+    }
+
+    final path = <int>[];
+    int? cursor = targetTileNumber;
+    while (cursor != null) {
+      path.add(cursor);
+      cursor = previous[cursor];
+    }
+    return path.reversed.toList();
+  }
+
+  Iterable<int> _neighborTileNumbers(MapTile tile) sync* {
+    final candidates = [
+      (tile.logicalX + 1, tile.logicalY),
+      (tile.logicalX - 1, tile.logicalY),
+      (tile.logicalX, tile.logicalY + 1),
+      (tile.logicalX, tile.logicalY - 1),
+    ];
+    for (final candidate in candidates) {
+      final neighbor = _tiles.cast<MapTile?>().firstWhere(
+            (tile) =>
+                tile?.logicalX == candidate.$1 &&
+                tile?.logicalY == candidate.$2,
+            orElse: () => null,
+          );
+      if (neighbor != null) {
+        yield neighbor.tileNumber;
+      }
+    }
+  }
+
+  bool _isPedestrianEntryPassable(int tileNumber, int targetTileNumber) {
+    if (tileNumber == targetTileNumber) {
+      return true;
+    }
+    final tile = _tileByNumber[tileNumber];
+    if (tile == null) {
+      return false;
+    }
+    if (tile.zone == TileZone.parking) {
+      return true;
+    }
+    return _isPedestrianCommercialTile(tileNumber);
+  }
+
+  bool _isPedestrianCommercialTile(int tileNumber) {
+    final tile = _tileByNumber[tileNumber];
+    if (tile == null || tile.zone != TileZone.commercial) {
+      return false;
+    }
+    if (_treeTileNumbers.contains(tileNumber)) {
+      return false;
+    }
+    if (_placedTiles.containsKey(tileNumber)) {
+      return false;
+    }
+    if (restroomTileNumbers.contains(tileNumber)) {
+      return false;
+    }
+    return true;
+  }
+
+  List<Offset> _offsetPedestrianRoute(List<int> tileNumbers) {
+    if (tileNumbers.length < 2) {
+      return [_tileCenterByNumber(tileNumbers.first)];
+    }
+
+    final result = <Offset>[];
+    for (var i = 1; i < tileNumbers.length; i++) {
+      final previous = _tileCenterByNumber(tileNumbers[i - 1]);
+      final current = _tileCenterByNumber(tileNumbers[i]);
+      final direction = current - previous;
+      if (direction.distance == 0) {
+        result.add(current);
+        continue;
+      }
+      final normal = Offset(direction.dy, -direction.dx) / direction.distance;
+      result.add(current + (normal * pedestrianSideOffset));
+    }
+    return result;
   }
 
   void _promoteQueuedVehicles() {
@@ -1009,16 +1546,39 @@ class HighwayTycoonGame extends FlameGame {
     final minute = minutesIntoDay % 60;
     return '$month월 $day일 $hour시 ${minute.toString().padLeft(2, '0')}분';
   }
+
+  static String _formatClockOnly(double totalMinutes) {
+    final snappedMinutes = totalMinutes.floor();
+    final minutesIntoDay = snappedMinutes % gameMinutesPerDay;
+    final hour = minutesIntoDay ~/ 60;
+    final minute = minutesIntoDay % 60;
+    return '$hour시 ${minute.toString().padLeft(2, '0')}분';
+  }
+
+  static String _formatMoney(int amount) {
+    final digits = amount.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      final indexFromEnd = digits.length - i;
+      buffer.write(digits[i]);
+      if (indexFromEnd > 1 && indexFromEnd % 3 == 1) {
+        buffer.write(',');
+      }
+    }
+    return '매출 ${buffer.toString()}원';
+  }
 }
 
 class PlacedTileData {
   const PlacedTileData({
     required this.label,
     required this.backgroundColor,
+    required this.showLabel,
   });
 
   final String label;
   final Color backgroundColor;
+  final bool showLabel;
 }
 
 class DailyArrival {
@@ -1041,6 +1601,20 @@ class VehicleDemandRange {
   final double max;
 }
 
+class RestaurantSpec {
+  const RestaurantSpec({
+    required this.cost,
+    required this.sedanRange,
+    required this.truckRange,
+    required this.busRange,
+  });
+
+  final int cost;
+  final VehicleDemandRange sedanRange;
+  final VehicleDemandRange truckRange;
+  final VehicleDemandRange busRange;
+}
+
 class ParkingSlot {
   ParkingSlot({
     required this.spotTileNumber,
@@ -1055,6 +1629,7 @@ class ParkingSlot {
 
 class MovingVehicle {
   MovingVehicle({
+    required this.id,
     required this.type,
     required this.position,
     required this.route,
@@ -1066,6 +1641,7 @@ class MovingVehicle {
     required this.queueLane,
   });
 
+  final int id;
   final VehicleType type;
   Offset position;
   List<Offset> route;
@@ -1075,6 +1651,32 @@ class MovingVehicle {
   double queueStartMinute;
   int? queueTileNumber;
   QueueLane? queueLane;
+}
+
+class WalkingPerson {
+  WalkingPerson({
+    required this.id,
+    required this.vehicleId,
+    required this.type,
+    required this.position,
+    required this.route,
+    required this.returnRoute,
+    required this.state,
+    required this.visitMinutes,
+    required this.dwellUntilMinute,
+    required this.speed,
+  });
+
+  final int id;
+  final int vehicleId;
+  final PersonType type;
+  Offset position;
+  List<Offset> route;
+  final List<Offset> returnRoute;
+  PersonState state;
+  final int visitMinutes;
+  double dwellUntilMinute;
+  final double speed;
 }
 
 class MapTile {
@@ -1182,4 +1784,42 @@ enum VehicleType {
 
   final Color color;
   final double speed;
+
+  String get label => switch (this) {
+        VehicleType.sedan => '세단',
+        VehicleType.truck => '트럭',
+        VehicleType.bus => '버스',
+      };
+}
+
+enum PersonState {
+  outbound,
+  dwell,
+  returning,
+}
+
+enum PersonShape {
+  circle,
+  triangle,
+  square,
+  star,
+}
+
+enum PersonType {
+  man(color: Color(0xFF2E73FF), shape: PersonShape.circle),
+  woman(color: Color(0xFFD94242), shape: PersonShape.circle),
+  boyBaby(color: Color(0xFF2E73FF), shape: PersonShape.triangle),
+  girlBaby(color: Color(0xFFD94242), shape: PersonShape.triangle),
+  grandfather(color: Color(0xFF2E73FF), shape: PersonShape.square),
+  grandmother(color: Color(0xFFD94242), shape: PersonShape.square),
+  boyStudent(color: Color(0xFF2E73FF), shape: PersonShape.star),
+  girlStudent(color: Color(0xFFD94242), shape: PersonShape.star);
+
+  const PersonType({
+    required this.color,
+    required this.shape,
+  });
+
+  final Color color;
+  final PersonShape shape;
 }
