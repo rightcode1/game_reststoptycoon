@@ -6,6 +6,7 @@ build/
 
 # generated files 제외
 *.g.dart
+.flutter-plugins-dependencies
 
 # FVM Version Cache
 .fvm/
