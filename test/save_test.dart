@@ -34,6 +34,29 @@ void main() {
       expect(restored.placedTiles.first.showLabel, isTrue);
       expect(restored.placedTiles.last.showLabel, isFalse);
     });
+
+    test('reputation 왕복이 값을 보존한다', () {
+      const original = GameSaveData(
+        money: 100,
+        elapsedGameMinutes: 0,
+        placedTiles: [],
+        reputation: 42.5,
+      );
+      final restored = GameSaveData.fromJson(
+        jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
+      );
+      expect(restored.reputation, 42.5);
+    });
+
+    test('reputation 없는 구버전 저장은 기본값으로 마이그레이션된다', () {
+      final restored = GameSaveData.fromJson({
+        'version': 6,
+        'money': 100,
+        'elapsedGameMinutes': 0.0,
+        'placedTiles': <dynamic>[],
+      });
+      expect(restored.reputation, GameSaveData.defaultReputation);
+    });
   });
 
   group('SaveRepository', () {

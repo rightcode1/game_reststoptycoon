@@ -366,6 +366,9 @@ class HighwayTycoonGame extends FlameGame {
     }
     _syncDynamicParkingSlots();
 
+    _reputation = data.reputation;
+    reputation.value = _reputation;
+
     _questIndex = data.questIndex.clamp(0, questLine.length);
     for (final metric in QuestMetric.values) {
       _questStats[metric] = data.questStats[metric.name] ?? 0;
@@ -468,6 +471,7 @@ class HighwayTycoonGame extends FlameGame {
         for (final entry in _questStats.entries) entry.key.name: entry.value,
       },
       tutorialSeen: _tutorialSeen,
+      reputation: _reputation,
       placedTiles: [
         for (final entry in _placedTiles.entries)
           PlacedTileSave(

@@ -57,6 +57,7 @@ class GameSaveData {
     this.questIndex = 0,
     this.questStats = const {},
     this.tutorialSeen = true,
+    this.reputation = defaultReputation,
   });
 
   factory GameSaveData.fromJson(Map<String, dynamic> json) {
@@ -76,6 +77,8 @@ class GameSaveData {
           const {},
       // v5 이하 저장(기존 유저)은 튜토리얼을 본 것으로 취급.
       tutorialSeen: json['tutorialSeen'] as bool? ?? true,
+      // v6 이하 저장에는 reputation이 없다 → 기본값으로 마이그레이션.
+      reputation: (json['reputation'] as num?)?.toDouble() ?? defaultReputation,
     );
   }
 
@@ -84,7 +87,11 @@ class GameSaveData {
   /// v3 → v4: placedTiles에 staffCount 추가 (없으면 0으로 읽음).
   /// v4 → v5: questIndex·questStats 추가 (없으면 0/빈 맵).
   /// v5 → v6: tutorialSeen 추가 (없으면 true — 기존 유저는 생략).
-  static const int currentVersion = 6;
+  /// v6 → v7: reputation 추가 (없으면 defaultReputation).
+  static const int currentVersion = 7;
+
+  /// reputation 미보유 저장의 기본 평판.
+  static const double defaultReputation = 70;
 
   final int version;
   final int money;
@@ -103,6 +110,9 @@ class GameSaveData {
   /// 튜토리얼 완료 여부.
   final bool tutorialSeen;
 
+  /// 휴게소 평판(0~100).
+  final double reputation;
+
   Map<String, dynamic> toJson() => {
         'version': version,
         'money': money,
@@ -112,6 +122,7 @@ class GameSaveData {
         'questIndex': questIndex,
         'questStats': questStats,
         'tutorialSeen': tutorialSeen,
+        'reputation': reputation,
       };
 }
 

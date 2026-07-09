@@ -65,6 +65,18 @@ void main() {
       expect(game.debugLostToday, 2);
     });
 
+    test('저장된 평판이 재시작 시 복원된다', () async {
+      SharedPreferences.setMockInitialValues({});
+      final game = HighwayTycoonGame();
+      await game.onLoad();
+      game.debugReputation = 33;
+      await game.saveNow();
+
+      final reloaded = HighwayTycoonGame();
+      await reloaded.onLoad();
+      expect(reloaded.debugReputation, 33);
+    });
+
     test('평판이 높을수록 일일 유입 범위가 커진다', () async {
       final game = await createGame();
 
