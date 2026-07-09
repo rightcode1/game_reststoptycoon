@@ -1261,6 +1261,12 @@ class HighwayTycoonGame extends FlameGame {
 
       canvas.drawPath(tile.path, Paint()..color = _tileColor(tile));
       canvas.drawPath(tile.path, borderPaint);
+      if (tile.logicalY < entryRoadStartY && !_isPlotUnlocked(tile)) {
+        canvas.drawPath(
+          tile.path,
+          Paint()..color = const Color(0x99000000),
+        );
+      }
       if (placementFootprint.contains(tile.tileNumber)) {
         canvas.drawPath(
           tile.path,
