@@ -59,5 +59,20 @@ void main() {
       final target = game.debugFirstAdjacentLockedPlot()!;
       expect(game.unlockPlot(target), isFalse);
     });
+
+    test('해금 상태가 저장·복원된다', () async {
+      SharedPreferences.setMockInitialValues({});
+      final game = HighwayTycoonGame();
+      await game.onLoad();
+      game.debugMoney = 1000000;
+      final target = game.debugFirstAdjacentLockedPlot()!;
+      game.unlockPlot(target);
+      final count = game.debugUnlockedPlotCount;
+      await game.saveNow();
+
+      final reloaded = HighwayTycoonGame();
+      await reloaded.onLoad();
+      expect(reloaded.debugUnlockedPlotCount, count);
+    });
   });
 }

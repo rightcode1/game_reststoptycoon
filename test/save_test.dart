@@ -57,6 +57,29 @@ void main() {
       });
       expect(restored.reputation, GameSaveData.defaultReputation);
     });
+
+    test('unlockedPlots 왕복이 값을 보존한다', () {
+      const original = GameSaveData(
+        money: 1,
+        elapsedGameMinutes: 0,
+        placedTiles: [],
+        unlockedPlots: [3, 7, 11],
+      );
+      final restored = GameSaveData.fromJson(
+        jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
+      );
+      expect(restored.unlockedPlots, [3, 7, 11]);
+    });
+
+    test('unlockedPlots 없는 v7 저장은 null로 읽힌다', () {
+      final restored = GameSaveData.fromJson({
+        'version': 7,
+        'money': 1,
+        'elapsedGameMinutes': 0.0,
+        'placedTiles': <dynamic>[],
+      });
+      expect(restored.unlockedPlots, isNull);
+    });
   });
 
   group('SaveRepository', () {

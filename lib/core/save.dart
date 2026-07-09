@@ -58,6 +58,7 @@ class GameSaveData {
     this.questStats = const {},
     this.tutorialSeen = true,
     this.reputation = defaultReputation,
+    this.unlockedPlots,
   });
 
   factory GameSaveData.fromJson(Map<String, dynamic> json) {
@@ -79,6 +80,10 @@ class GameSaveData {
       tutorialSeen: json['tutorialSeen'] as bool? ?? true,
       // v6 이하 저장에는 reputation이 없다 → 기본값으로 마이그레이션.
       reputation: (json['reputation'] as num?)?.toDouble() ?? defaultReputation,
+      // v7 이하 저장에는 없다 → null(게임이 전체 개방으로 마이그레이션).
+      unlockedPlots: (json['unlockedPlots'] as List<dynamic>?)
+          ?.map((e) => e as int)
+          .toList(),
     );
   }
 
@@ -88,7 +93,8 @@ class GameSaveData {
   /// v4 → v5: questIndex·questStats 추가 (없으면 0/빈 맵).
   /// v5 → v6: tutorialSeen 추가 (없으면 true — 기존 유저는 생략).
   /// v6 → v7: reputation 추가 (없으면 defaultReputation).
-  static const int currentVersion = 7;
+  /// v7 → v8: unlockedPlots 추가 (없으면 게임이 전체 개방으로 마이그레이션).
+  static const int currentVersion = 8;
 
   /// reputation 미보유 저장의 기본 평판.
   static const double defaultReputation = 70;
@@ -113,6 +119,9 @@ class GameSaveData {
   /// 휴게소 평판(0~100).
   final double reputation;
 
+  /// 해금된 부지 플롯키 목록. null이면 구버전(전체 개방으로 처리).
+  final List<int>? unlockedPlots;
+
   Map<String, dynamic> toJson() => {
         'version': version,
         'money': money,
@@ -123,6 +132,7 @@ class GameSaveData {
         'questStats': questStats,
         'tutorialSeen': tutorialSeen,
         'reputation': reputation,
+        if (unlockedPlots != null) 'unlockedPlots': unlockedPlots,
       };
 }
 

@@ -384,6 +384,15 @@ class HighwayTycoonGame extends FlameGame {
     }
     _syncDynamicParkingSlots();
 
+    if (data.unlockedPlots != null) {
+      _unlockedPlots
+        ..clear()
+        ..addAll(data.unlockedPlots!);
+    } else {
+      // v7 이하(기존 유저): 전체 개방으로 마이그레이션.
+      _unlockAllPlots();
+    }
+
     _reputation = data.reputation;
     reputation.value = _reputation;
 
@@ -490,6 +499,7 @@ class HighwayTycoonGame extends FlameGame {
       },
       tutorialSeen: _tutorialSeen,
       reputation: _reputation,
+      unlockedPlots: _unlockedPlots.toList(),
       placedTiles: [
         for (final entry in _placedTiles.entries)
           PlacedTileSave(
@@ -1010,12 +1020,7 @@ class HighwayTycoonGame extends FlameGame {
   int get debugUnlockedPlotCount => _unlockedPlots.length;
 
   @visibleForTesting
-  void debugUnlockAllPlots() {
-    final total = _plotsPerRow * (mapRows ~/ Balance.landPlotSize);
-    for (var i = 0; i < total; i++) {
-      _unlockedPlots.add(i);
-    }
-  }
+  void debugUnlockAllPlots() => _unlockAllPlots();
 
   @visibleForTesting
   int? debugFirstAdjacentLockedPlot() {
@@ -1554,6 +1559,14 @@ class HighwayTycoonGame extends FlameGame {
   int _currentLandUnlockCost() => Balance.landUnlockCost(
         _unlockedPlots.length - _startingUnlockedPlots().length,
       );
+
+  /// 모든 플롯을 연다(구버전 저장 마이그레이션·테스트용).
+  void _unlockAllPlots() {
+    final total = _plotsPerRow * (mapRows ~/ Balance.landPlotSize);
+    for (var i = 0; i < total; i++) {
+      _unlockedPlots.add(i);
+    }
+  }
 
   /// 플롯을 해금한다. 인접·잔액 조건을 만족하면 true.
   bool unlockPlot(int plotKey) {
