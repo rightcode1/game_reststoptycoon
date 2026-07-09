@@ -49,7 +49,7 @@
         <application
                 android:name="${applicationName}"
                 android:icon="@mipmap/ic_launcher"
-                android:label="Skin52"
+                android:label="휴게소 타이쿤"
                 android:usesCleartextTraffic="true"
                 android:showWhenLocked="true"
                 android:turnScreenOn="true"
@@ -58,11 +58,12 @@
     <application
             android:name="${applicationName}"
             android:icon="@mipmap/ic_launcher"
-            android:label="Fen52"
+            android:label="휴게소 타이쿤"
             android:usesCleartextTraffic="true"
     >
         <activity
                 android:name=".MainActivity"
+                android:screenOrientation="portrait"
                 android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                 android:exported="true"
                 android:hardwareAccelerated="true"

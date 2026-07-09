@@ -1,7 +1,7 @@
 name: reststop_tycoon
 description: Korean expressway rest-stop management tycoon prototype built with Flutter and Flame.
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flame: ^1.19.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

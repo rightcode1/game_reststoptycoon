@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/balance.dart';
 import 'game/highway_tycoon_game.dart';
 
 class RestStopTycoonApp extends StatefulWidget {
@@ -11,14 +12,23 @@ class RestStopTycoonApp extends StatefulWidget {
   State<RestStopTycoonApp> createState() => _RestStopTycoonAppState();
 }
 
-class _RestStopTycoonAppState extends State<RestStopTycoonApp> {
+class _RestStopTycoonAppState extends State<RestStopTycoonApp>
+    with WidgetsBindingObserver {
   late final HighwayTycoonGame _game;
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   double _lastGestureScale = 1.0;
 
   @override
   void initState() {
     super.initState();
     _game = HighwayTycoonGame();
+    _game.notice.addListener(_onNotice);
+    _game.upgradeRequest.addListener(_onUpgradeRequest);
+    _game.offlineEarnings.addListener(_onOfflineEarnings);
+    _game.tutorialRequested.addListener(_onTutorialRequested);
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -27,16 +37,278 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _game.notice.removeListener(_onNotice);
+    _game.upgradeRequest.removeListener(_onUpgradeRequest);
+    _game.offlineEarnings.removeListener(_onOfflineEarnings);
+    _game.tutorialRequested.removeListener(_onTutorialRequested);
     _game.timeLabel.dispose();
     _game.moneyLabel.dispose();
+    _game.notice.dispose();
+    _game.pendingPlacementLabel.dispose();
+    _game.upgradeRequest.dispose();
+    _game.offlineEarnings.dispose();
+    _game.questLabel.dispose();
+    _game.tutorialRequested.dispose();
+    _game.soundEnabled.dispose();
     super.dispose();
+  }
+
+  void _onTutorialRequested() {
+    if (!_game.tutorialRequested.value) {
+      return;
+    }
+    _game.tutorialRequested.value = false;
+    final context = _navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    const pages = [
+      (
+        '휴게소 타이쿤에 오신 것을 환영합니다!',
+        '고속도로를 달리던 차들이 휴게소에 들릅니다.\n'
+            '방문객에게 먹거리를 팔아 휴게소를 키워보세요.',
+      ),
+      (
+        '건설하기',
+        '하단 [건설] 버튼에서 매장을 고른 뒤,\n'
+            '맵의 회색 하이라이트 타일을 탭하면 배치됩니다.\n'
+            '매장이 많을수록 더 많은 차가 들어옵니다.',
+      ),
+      (
+        '키우기',
+        '배치된 매장을 탭하면 업그레이드와 직원 고용이 가능합니다.\n'
+            '좌상단의 목표를 따라가면 보상을 받을 수 있어요!',
+      ),
+    ];
+    var pageIndex = 0;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final (title, body) = pages[pageIndex];
+            final isLast = pageIndex == pages.length - 1;
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2A2218),
+              title: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              content: Text(
+                body,
+                style: const TextStyle(
+                  color: Color(0xFFE7D7B7),
+                  fontWeight: FontWeight.w600,
+                  height: 1.5,
+                ),
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () {
+                    if (isLast) {
+                      Navigator.of(dialogContext).pop();
+                      _game.completeTutorial();
+                      return;
+                    }
+                    setState(() {
+                      pageIndex++;
+                    });
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD49C3D),
+                    foregroundColor: const Color(0xFF23170A),
+                  ),
+                  child: Text(
+                    isLast ? '시작하기' : '다음',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _onOfflineEarnings() {
+    final report = _game.offlineEarnings.value;
+    if (report == null) {
+      return;
+    }
+    _game.offlineEarnings.value = null;
+    final context = _navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2218),
+          title: const Text(
+            '부재 중 수익',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            '자리를 비운 ${report.offlineGameDays.round()}게임일 동안 '
+            '매장들이 ${report.amount}원을 벌었습니다!',
+            style: const TextStyle(
+              color: Color(0xFFE7D7B7),
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD49C3D),
+                foregroundColor: const Color(0xFF23170A),
+              ),
+              child: const Text(
+                '확인',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _onUpgradeRequest() {
+    final request = _game.upgradeRequest.value;
+    if (request == null) {
+      return;
+    }
+    _game.upgradeRequest.value = null;
+    final context = _navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        const bodyStyle = TextStyle(
+          color: Color(0xFFE7D7B7),
+          fontWeight: FontWeight.w600,
+        );
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2218),
+          title: Text(
+            '${request.storeName} Lv.${request.level}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                request.nextSalePrice == null
+                    ? '판매가: ${request.currentSalePrice}원'
+                    : '판매가: ${request.currentSalePrice}원 → '
+                        '${request.nextSalePrice}원',
+                style: bodyStyle,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                request.upgradeCost == null
+                    ? '이미 최대 레벨입니다'
+                    : '업그레이드 비용: ${request.upgradeCost}원',
+                style: bodyStyle,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '직원: ${request.staffCount}/${Balance.maxStaffPerStore}명 '
+                '(1명당 판매 수익 +${(Balance.staffSalesBonusPerStaff * 100).round()}%)',
+                style: bodyStyle,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('닫기'),
+            ),
+            if (request.staffHireCost != null)
+              FilledButton.tonal(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  _game.hireStaff(request.anchorTileNumber);
+                },
+                child: Text(
+                  '직원 고용 (${request.staffHireCost}원)',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            if (request.upgradeCost != null)
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  _game.upgradeStore(request.anchorTileNumber);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD49C3D),
+                  foregroundColor: const Color(0xFF23170A),
+                ),
+                child: const Text(
+                  '업그레이드',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _onNotice() {
+    final message = _game.notice.value;
+    if (message == null) {
+      return;
+    }
+    _game.notice.value = null;
+    _messengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 백그라운드 전환/종료 직전에 진행 상태를 저장한다.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _game.saveNow();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _messengerKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF6C7680),
@@ -96,31 +368,67 @@ class _RestStopHome extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                 child: Align(
                   alignment: Alignment.topLeft,
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: game.timeLabel,
-                    builder: (context, value, _) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xCC1E1A16),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color(0x66F0D69A),
-                          ),
-                        ),
-                        child: Text(
-                          value,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      );
-                    },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ValueListenableBuilder<String>(
+                        valueListenable: game.timeLabel,
+                        builder: (context, value, _) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC1E1A16),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0x66F0D69A),
+                              ),
+                            ),
+                            child: Text(
+                              value,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      ValueListenableBuilder<String?>(
+                        valueListenable: game.questLabel,
+                        builder: (context, value, _) {
+                          if (value == null) {
+                            return const SizedBox.shrink();
+                          }
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC2E4A2C),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0x669CD98B),
+                              ),
+                            ),
+                            child: Text(
+                              value,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -131,35 +439,61 @@ class _RestStopHome extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
               child: Align(
                 alignment: Alignment.topRight,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _showArrivalScheduleDialog(context, game),
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: game.moneyLabel,
-                    builder: (context, value, _) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showArrivalScheduleDialog(context, game),
+                      child: ValueListenableBuilder<String>(
+                        valueListenable: game.moneyLabel,
+                        builder: (context, value, _) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC1E1A16),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0x66F0D69A),
+                              ),
+                            ),
+                            child: Text(
+                              value,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showSettingsDialog(context, game),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: const Color(0xCC1E1A16),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: const Color(0x66F0D69A),
                           ),
                         ),
-                        child: Text(
-                          value,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: const Icon(
+                          Icons.settings,
+                          color: Colors.white,
+                          size: 18,
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -168,37 +502,193 @@ class _RestStopHome extends StatelessWidget {
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: FilledButton(
-          onPressed: () async {
-            final selectedItem = await Navigator.of(context).push<String>(
-              MaterialPageRoute<String>(
-                builder: (_) => const ConstructionScreen(),
+        child: ValueListenableBuilder<String?>(
+          valueListenable: game.pendingPlacementLabel,
+          builder: (context, placingItem, _) {
+            if (placingItem != null) {
+              return FilledButton(
+                onPressed: game.cancelPlacement,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF8C3B2E),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  '$placingItem 배치 취소',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              );
+            }
+            return FilledButton(
+              onPressed: () async {
+                final selectedItem = await Navigator.of(context).push<String>(
+                  MaterialPageRoute<String>(
+                    builder: (_) => const ConstructionScreen(),
+                  ),
+                );
+                if (selectedItem != null) {
+                  game.startPlacement(selectedItem);
+                }
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD49C3D),
+                foregroundColor: const Color(0xFF23170A),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                '건설',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             );
-            if (selectedItem != null) {
-              game.startPlacement(selectedItem);
-            }
           },
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFD49C3D),
-            foregroundColor: const Color(0xFF23170A),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 28,
-              vertical: 14,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: const Text(
-            '건설',
+        ),
+      ),
+    );
+  }
+
+  void _showSettingsDialog(BuildContext context, HighwayTycoonGame game) {
+    const bodyStyle = TextStyle(
+      color: Color(0xFFE7D7B7),
+      fontWeight: FontWeight.w600,
+    );
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2218),
+          title: const Text(
+            '설정',
             style: TextStyle(
-              fontSize: 18,
+              color: Colors.white,
               fontWeight: FontWeight.w800,
             ),
           ),
-        ),
-      ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('사운드', style: bodyStyle),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: game.soundEnabled,
+                    builder: (context, enabled, _) {
+                      return Switch(
+                        value: enabled,
+                        activeTrackColor: const Color(0xFFD49C3D),
+                        onChanged: game.setSoundEnabled,
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const Text(
+                '(사운드 에셋 준비 전 — 현재 무음)',
+                style: TextStyle(
+                  color: Color(0xFF9A8A6E),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  game.tutorialRequested.value = true;
+                },
+                child: const Text('튜토리얼 다시 보기'),
+              ),
+              TextButton(
+                onPressed: () => _confirmReset(dialogContext, game),
+                child: const Text(
+                  '데이터 초기화',
+                  style: TextStyle(color: Color(0xFFE57373)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD49C3D),
+                foregroundColor: const Color(0xFF23170A),
+              ),
+              child: const Text(
+                '닫기',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmReset(BuildContext settingsContext, HighwayTycoonGame game) {
+    showDialog<void>(
+      context: settingsContext,
+      builder: (confirmContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2218),
+          title: const Text(
+            '정말 초기화할까요?',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: const Text(
+            '자금, 시설, 퀘스트 등 모든 진행 상황이 삭제됩니다.\n'
+            '이 작업은 되돌릴 수 없습니다.',
+            style: TextStyle(
+              color: Color(0xFFE7D7B7),
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(confirmContext).pop(),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(confirmContext).pop(); // 확인 다이얼로그 닫기
+                Navigator.of(settingsContext).pop(); // 설정 다이얼로그 닫기
+                game.resetGame();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB23B2E),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                '초기화',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -265,19 +755,11 @@ class _RestStopHome extends StatelessWidget {
 class ConstructionScreen extends StatefulWidget {
   const ConstructionScreen({super.key});
 
-  @override
-  State<ConstructionScreen> createState() => _ConstructionScreenState();
-}
-
-class _ConstructionScreenState extends State<ConstructionScreen> {
-  static const List<String> _categories = [
-    '식당',
-    '카페/디저트',
-    '편의시설',
-    '특수시설',
-  ];
-
-  static const Map<String, List<String>> _itemsByCategory = {
+  /// 건설 화면에 노출되는 매장 카탈로그.
+  /// 매장 이름 문자열이 곧 게임 로직(`Balance.storeSpecs` 등)의 키이므로
+  /// 항목을 추가/변경할 때 `lib/core/balance.dart`도 함께 맞춰야 한다.
+  /// (`test/balance_test.dart`가 정합성을 검증)
+  static const Map<String, List<String>> itemsByCategory = {
     '식당': [
       '라면',
       '돈까스',
@@ -302,6 +784,18 @@ class _ConstructionScreenState extends State<ConstructionScreen> {
     '편의시설': [],
     '특수시설': ['주차'],
   };
+
+  @override
+  State<ConstructionScreen> createState() => _ConstructionScreenState();
+}
+
+class _ConstructionScreenState extends State<ConstructionScreen> {
+  static const List<String> _categories = [
+    '식당',
+    '카페/디저트',
+    '편의시설',
+    '특수시설',
+  ];
 
   static const Map<String, String> _descriptions = {
     '라면': '빠르게 조리해 회전율을 높일 수 있는 대표 휴게소 식당 예시입니다.',
@@ -329,7 +823,9 @@ class _ConstructionScreenState extends State<ConstructionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _itemsByCategory[_selectedCategory] ?? const <String>[];
+    final items =
+        ConstructionScreen.itemsByCategory[_selectedCategory] ??
+            const <String>[];
     final previewDescription = _previewItem == null
         ? null
         : _descriptions[_previewItem] ?? '매장 설명 예시입니다.';

@@ -46,7 +46,7 @@ xcrun simctl boot "$UDID"; open -a Simulator; xcrun simctl bootstatus "$UDID"
 
 ## Run (agent path) — 드라이버로 조작·검증
 
-앱을 실제 시뮬레이터에서 구동해 유저 플로우(건설 → 라면 선택 → 맵 배치 → 매출 500원 차감)를
+앱을 실제 시뮬레이터에서 구동해 유저 플로우(건설 → 라면 선택 → 맵 배치 → 자금 500원 차감)를
 탭 단위로 실행·검증한다. 코드 변경이 실제 앱에서 동작하는지 볼 때 이걸 먼저 쓴다:
 
 ```bash
@@ -76,12 +76,15 @@ for i in $(seq 1 90); do grep -q "Flutter run key commands" /tmp/reststop_run.lo
 | 종료 | `kill $(cat /tmp/reststop_flutter.pid)` |
 
 스크린샷을 찍었으면 반드시 열어서 확인할 것 — 게임 맵(주황/회색 마름모 타일), 좌상단 시간 HUD,
-우상단 `매출 N원`, 하단 `건설` 버튼이 보여야 정상 렌더링이다.
+우상단 `자금 N원`, 하단 `건설` 버튼이 보여야 정상 렌더링이다.
 
 ## Test
 
-유닛 테스트는 없다 (`test/` 디렉토리 없음). 위의 integration test가 유일한 테스트다.
-`fvm flutter analyze`는 통과 상태 유지.
+```bash
+fvm flutter test    # 유닛 테스트 (test/ — 밸런스/경제/저장/주차, 기기 불필요)
+```
+
+시뮬레이터가 필요한 것은 위의 integration test뿐이다. `fvm flutter analyze`는 통과 상태 유지.
 
 ## Gotchas
 
