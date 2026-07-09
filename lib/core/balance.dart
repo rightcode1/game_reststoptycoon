@@ -47,6 +47,16 @@ abstract final class Balance {
   /// 교착으로 보고 강제 정리해 코리도 흐름을 되살린다. 영구 gridlock 방지.
   static const int gridlockGiveUpMinutes = 30;
 
+  /// 부지 플롯 한 변의 타일 수. 맵(50)을 정확히 나눠야 한다.
+  static const int landPlotSize = 10;
+
+  /// 첫 부지 해금 비용(점증 기준).
+  static const int landUnlockBaseCost = 2000;
+
+  /// n번째(시작분 제외) 부지 해금 비용. 점증.
+  static int landUnlockCost(int unlockedBeyondStart) =>
+      landUnlockBaseCost * (unlockedBeyondStart + 1);
+
   /// 시작 평판(0~100).
   static const double reputationStart = 70;
 

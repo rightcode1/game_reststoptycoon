@@ -107,5 +107,14 @@ void main() {
       expect(Balance.demandFactor(-20), closeTo(Balance.demandFactorMin, 1e-9));
       expect(Balance.demandFactor(200), closeTo(Balance.demandFactorMax, 1e-9));
     });
+
+    test('부지 해금 밸런스 수치가 유효하다', () {
+      // 플롯 크기가 맵을 정확히 나눠야 격자가 어긋나지 않는다.
+      expect(50 % Balance.landPlotSize, 0);
+      expect(Balance.landUnlockBaseCost, greaterThan(0));
+      // 점증: 해금할수록 비싸진다.
+      expect(Balance.landUnlockCost(1), greaterThan(Balance.landUnlockCost(0)));
+      expect(Balance.landUnlockCost(0), Balance.landUnlockBaseCost);
+    });
   });
 }
