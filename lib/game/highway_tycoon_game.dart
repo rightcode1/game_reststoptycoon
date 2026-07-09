@@ -112,6 +112,13 @@ class HighwayTycoonGame extends FlameGame {
   /// HUD 퀘스트 배너 텍스트. 모든 퀘스트 완료 시 null.
   final ValueNotifier<String?> questLabel = ValueNotifier<String?>(null);
 
+  /// 평판(0~100) — HUD 배지가 구독.
+  final ValueNotifier<double> reputation =
+      ValueNotifier<double>(Balance.reputationStart);
+
+  /// 오늘 정체로 놓친 손님(차량) 수 — HUD 정체 경고가 구독.
+  final ValueNotifier<int> congestion = ValueNotifier<int>(0);
+
   /// 최초 실행(또는 튜토리얼 미완료) 시 true — UI가 튜토리얼을 띄운다.
   final ValueNotifier<bool> tutorialRequested = ValueNotifier<bool>(false);
   bool _tutorialSeen = false;
@@ -155,6 +162,8 @@ class HighwayTycoonGame extends FlameGame {
   double _elapsedGameMinutes = startingGameMinutes.toDouble();
   double _previousElapsedGameMinutes = startingGameMinutes.toDouble();
   int _currentTrafficDay = -1;
+  double _reputation = Balance.reputationStart;
+  int _lostToday = 0;
   int _money = Balance.startingMoney;
   int _nextVehicleId = 1;
   int _nextPersonId = 1;
@@ -208,6 +217,10 @@ class HighwayTycoonGame extends FlameGame {
     _floatingSaleTexts.clear();
     _dailyArrivals.clear();
     _currentTrafficDay = -1;
+    _reputation = Balance.reputationStart;
+    reputation.value = _reputation;
+    _lostToday = 0;
+    congestion.value = 0;
 
     _questIndex = 0;
     for (final metric in QuestMetric.values) {
@@ -220,6 +233,26 @@ class HighwayTycoonGame extends FlameGame {
     tutorialRequested.value = true;
     _rebuildTrafficPlan(force: true);
     notice.value = '데이터를 초기화했습니다';
+  }
+
+  /// 평판을 [target](0 또는 100) 쪽으로 [step] 비율만큼 EMA 이동.
+  void _nudgeReputation(double target, double step) {
+    _reputation =
+        (_reputation + (target - _reputation) * step).clamp(0.0, 100.0);
+    reputation.value = _reputation;
+  }
+
+  /// 차량이 정상 주차(서비스)됐을 때 호출 — 평판 상승.
+  void _registerServedVehicle() {
+    _nudgeReputation(100, Balance.reputationServedStep);
+  }
+
+  /// 차량이 정체로 이탈했을 때 호출 — 평판 하락 + 손실 카운터.
+  /// [position]은 이탈 플로팅 표시에 쓰인다(Task 5에서 사용).
+  void _registerLostVehicle(Offset position) {
+    _nudgeReputation(0, Balance.reputationLostStep);
+    _lostToday++;
+    congestion.value = _lostToday;
   }
 
   /// 퀘스트 지표를 올리고, 현재 퀘스트가 달성됐으면 보상 지급 후 다음으로.
@@ -895,6 +928,24 @@ class HighwayTycoonGame extends FlameGame {
   @visibleForTesting
   int get debugFloatingSaleTextCount => _floatingSaleTexts.length;
 
+  @visibleForTesting
+  double get debugReputation => _reputation;
+
+  @visibleForTesting
+  set debugReputation(double value) {
+    _reputation = value;
+    reputation.value = value;
+  }
+
+  @visibleForTesting
+  int get debugLostToday => _lostToday;
+
+  @visibleForTesting
+  void debugRegisterServedVehicle() => _registerServedVehicle();
+
+  @visibleForTesting
+  void debugRegisterLostVehicle() => _registerLostVehicle(Offset.zero);
+
   /// 지정한 타일에 [itemName]을 건설한다. 테스트 전용.
   @visibleForTesting
   bool debugBuildAt(int tileNumber, String itemName) {
@@ -1448,6 +1499,8 @@ class HighwayTycoonGame extends FlameGame {
     }
 
     _currentTrafficDay = day;
+    _lostToday = 0;
+    congestion.value = 0;
     _dailyArrivals
       ..clear()
       ..addAll(_buildDailyArrivals(day));
@@ -1614,6 +1667,7 @@ class HighwayTycoonGame extends FlameGame {
     if (_isSpawnOccupied(throughRoute.first)) {
       return false;
     }
+    _registerLostVehicle(throughRoute.first);
     _vehicles.add(
       MovingVehicle(
         id: _nextVehicleId++,
@@ -1654,6 +1708,7 @@ class HighwayTycoonGame extends FlameGame {
           vehicle.parkingSlot!.reservedBy = null;
           _playSound(GameSound.vehicleArrive);
           _spawnPeopleForVehicle(vehicle);
+          _registerServedVehicle();
         } else if (vehicle.state == VehicleState.exiting ||
             vehicle.state == VehicleState.passingThrough) {
           completed.add(vehicle);
@@ -2100,6 +2155,7 @@ class HighwayTycoonGame extends FlameGame {
           Balance.queueGiveUpMinutes) {
         vehicle.route = _queuePassThroughRoute();
         vehicle.state = VehicleState.passingThrough;
+        _registerLostVehicle(vehicle.position);
         vehicle.queueTileNumber = null;
         vehicle.queueLane = null;
       }

@@ -50,6 +50,8 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp>
     _game.upgradeRequest.dispose();
     _game.offlineEarnings.dispose();
     _game.questLabel.dispose();
+    _game.reputation.dispose();
+    _game.congestion.dispose();
     _game.tutorialRequested.dispose();
     _game.soundEnabled.dispose();
     super.dispose();
