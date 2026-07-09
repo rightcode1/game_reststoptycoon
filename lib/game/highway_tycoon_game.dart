@@ -164,6 +164,7 @@ class HighwayTycoonGame extends FlameGame {
   int _currentTrafficDay = -1;
   double _reputation = Balance.reputationStart;
   int _lostToday = 0;
+  final Set<int> _unlockedPlots = <int>{};
   int _money = Balance.startingMoney;
   int _nextVehicleId = 1;
   int _nextPersonId = 1;
@@ -174,6 +175,9 @@ class HighwayTycoonGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     _buildTileMap();
+    _unlockedPlots
+      ..clear()
+      ..addAll(_startingUnlockedPlots());
     soundEnabled.value = await _settingsRepository.loadSoundEnabled();
     final saved = await _saveRepository.load();
     if (saved != null) {
@@ -221,6 +225,9 @@ class HighwayTycoonGame extends FlameGame {
     reputation.value = _reputation;
     _lostToday = 0;
     congestion.value = 0;
+    _unlockedPlots
+      ..clear()
+      ..addAll(_startingUnlockedPlots());
 
     _questIndex = 0;
     for (final metric in QuestMetric.values) {
@@ -976,6 +983,17 @@ class HighwayTycoonGame extends FlameGame {
   @visibleForTesting
   int get debugPendingArrivalCount => _dailyArrivals.length;
 
+  @visibleForTesting
+  int get debugUnlockedPlotCount => _unlockedPlots.length;
+
+  @visibleForTesting
+  void debugUnlockAllPlots() {
+    final total = _plotsPerRow * (mapRows ~/ Balance.landPlotSize);
+    for (var i = 0; i < total; i++) {
+      _unlockedPlots.add(i);
+    }
+  }
+
   /// 지정한 타일에 [itemName]을 건설한다. 테스트 전용.
   @visibleForTesting
   bool debugBuildAt(int tileNumber, String itemName) {
@@ -1467,9 +1485,36 @@ class HighwayTycoonGame extends FlameGame {
     return best;
   }
 
+  static const int _plotsPerRow = mapColumns ~/ Balance.landPlotSize;
+
+  int _plotKeyForTile(MapTile tile) =>
+      ((tile.logicalX - 1) ~/ Balance.landPlotSize) * _plotsPerRow +
+      ((tile.logicalY - 1) ~/ Balance.landPlotSize);
+
+  int? _plotKeyForTileNumber(int tileNumber) {
+    final tile = _tileByNumber[tileNumber];
+    return tile == null ? null : _plotKeyForTile(tile);
+  }
+
+  bool _isPlotUnlocked(MapTile tile) =>
+      _unlockedPlots.contains(_plotKeyForTile(tile));
+
+  /// 기능적 시작 영역(초기 상업 2147 + 기본 주차 2092·2121)을 덮는 플롯.
+  Set<int> _startingUnlockedPlots() {
+    final keys = <int>{};
+    for (final tileNumber in const [2147, 2092, 2121]) {
+      final key = _plotKeyForTileNumber(tileNumber);
+      if (key != null) {
+        keys.add(key);
+      }
+    }
+    return keys;
+  }
+
   List<int>? _placementFootprintFor(MapTile anchorTile, String itemName) {
     if (_specialLabelFor(anchorTile) != null ||
-        _placedTiles.containsKey(anchorTile.tileNumber)) {
+        _placedTiles.containsKey(anchorTile.tileNumber) ||
+        !_isPlotUnlocked(anchorTile)) {
       return null;
     }
 
@@ -1495,6 +1540,7 @@ class HighwayTycoonGame extends FlameGame {
       );
       if (tile == null ||
           tile.zone != TileZone.commercial ||
+          !_isPlotUnlocked(tile) ||
           _specialLabelFor(tile) != null ||
           _placedTiles.containsKey(tile.tileNumber)) {
         return null;
