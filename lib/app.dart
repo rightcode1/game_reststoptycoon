@@ -430,6 +430,70 @@ class _RestStopHome extends StatelessWidget {
                           );
                         },
                       ),
+                      const SizedBox(height: 8),
+                      ValueListenableBuilder<double>(
+                        valueListenable: game.reputation,
+                        builder: (context, value, _) {
+                          final rep = value.round();
+                          // 평판이 낮을수록 붉게, 높을수록 초록으로.
+                          final color = Color.lerp(
+                            const Color(0xFFE57373),
+                            const Color(0xFF9CD98B),
+                            (value / 100).clamp(0.0, 1.0),
+                          )!;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC1E1A16),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: color),
+                            ),
+                            child: Text(
+                              '평판 $rep',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      ValueListenableBuilder<int>(
+                        valueListenable: game.congestion,
+                        builder: (context, value, _) {
+                          if (value <= 0) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xCC4A2C2C),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0x66E57373),
+                                ),
+                              ),
+                              child: Text(
+                                '정체 · 오늘 놓친 손님 $value대',
+                                style: const TextStyle(
+                                  color: Color(0xFFFFCDD2),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
