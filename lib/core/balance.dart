@@ -43,6 +43,28 @@ abstract final class Balance {
   /// 대기열에서 버티다 포기하고 통과 차량으로 전환되는 시간(게임 분).
   static const int queueGiveUpMinutes = 60;
 
+  /// 시작 평판(0~100).
+  static const double reputationStart = 70;
+
+  /// 차량이 정상 주차(서비스)될 때 평판이 100 쪽으로 이동하는 EMA 비율.
+  static const double reputationServedStep = 0.02;
+
+  /// 차량이 정체로 이탈할 때 평판이 0 쪽으로 이동하는 EMA 비율(> served).
+  static const double reputationLostStep = 0.06;
+
+  /// 평판 0에서의 유입 배수(바닥 — 죽음의 나선 방지).
+  static const double demandFactorMin = 0.5;
+
+  /// 평판 100에서의 유입 배수(천장 — 보너스).
+  static const double demandFactorMax = 1.2;
+
+  /// 평판(0~100)을 일일 유입 배수로 변환. 범위 밖 입력은 클램프한다.
+  static double demandFactor(double reputation) {
+    final clamped = reputation.clamp(0.0, 100.0);
+    return demandFactorMin +
+        (demandFactorMax - demandFactorMin) * (clamped / 100);
+  }
+
   /// 방문객이 매장 앞에서 체류하는 시간 범위(게임 분).
   static const int visitMinutesMin = 20;
   static const int visitMinutesMax = 80;

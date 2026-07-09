@@ -79,5 +79,33 @@ void main() {
         lessThanOrEqualTo(Balance.parkDurationMinutes),
       );
     });
+
+    test('평판·수요 밸런스 수치가 유효하다', () {
+      expect(Balance.reputationStart, inInclusiveRange(0, 100));
+      // 이탈이 정상 서비스보다 평판을 더 크게 움직여야 정체가 아프게 느껴진다.
+      expect(
+        Balance.reputationLostStep,
+        greaterThan(Balance.reputationServedStep),
+      );
+      expect(Balance.reputationServedStep, greaterThan(0));
+      expect(Balance.demandFactorMin, greaterThan(0));
+      expect(
+        Balance.demandFactorMax,
+        greaterThan(Balance.demandFactorMin),
+      );
+    });
+
+    test('demandFactor는 평판에 비례하며 바닥/천장을 지킨다', () {
+      expect(Balance.demandFactor(0), closeTo(Balance.demandFactorMin, 1e-9));
+      expect(Balance.demandFactor(100), closeTo(Balance.demandFactorMax, 1e-9));
+      // 중간값은 선형 보간.
+      expect(
+        Balance.demandFactor(50),
+        closeTo((Balance.demandFactorMin + Balance.demandFactorMax) / 2, 1e-9),
+      );
+      // 범위를 벗어난 입력도 클램프된다.
+      expect(Balance.demandFactor(-20), closeTo(Balance.demandFactorMin, 1e-9));
+      expect(Balance.demandFactor(200), closeTo(Balance.demandFactorMax, 1e-9));
+    });
   });
 }
