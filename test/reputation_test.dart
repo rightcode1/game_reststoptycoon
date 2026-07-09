@@ -65,6 +65,13 @@ void main() {
       expect(game.debugLostToday, 2);
     });
 
+    test('이탈 시 놓침 플로팅 텍스트가 추가된다', () async {
+      final game = await createGame();
+      final before = game.debugFloatingSaleTextCount;
+      game.debugRegisterLostVehicle();
+      expect(game.debugFloatingSaleTextCount, before + 1);
+    });
+
     test('저장된 평판이 재시작 시 복원된다', () async {
       SharedPreferences.setMockInitialValues({});
       final game = HighwayTycoonGame();

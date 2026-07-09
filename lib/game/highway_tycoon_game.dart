@@ -253,6 +253,13 @@ class HighwayTycoonGame extends FlameGame {
     _nudgeReputation(0, Balance.reputationLostStep);
     _lostToday++;
     congestion.value = _lostToday;
+    _floatingSaleTexts.add(
+      FloatingSaleText(
+        position: position - const Offset(0, 16),
+        text: '놓침',
+        color: const Color(0xFFE57373),
+      ),
+    );
   }
 
   /// 퀘스트 지표를 올리고, 현재 퀘스트가 달성됐으면 보상 지급 후 다음으로.
@@ -533,7 +540,7 @@ class HighwayTycoonGame extends FlameGame {
         text: TextSpan(
           text: floating.text,
           style: TextStyle(
-            color: const Color(0xFFFFE082).withValues(alpha: opacity),
+            color: floating.color.withValues(alpha: opacity),
             fontSize: 13,
             fontWeight: FontWeight.w800,
             shadows: [
@@ -2520,10 +2527,12 @@ class FloatingSaleText {
   FloatingSaleText({
     required this.position,
     required this.text,
+    this.color = const Color(0xFFFFE082),
   });
 
   Offset position;
   final String text;
+  final Color color;
   double age = 0;
 }
 
