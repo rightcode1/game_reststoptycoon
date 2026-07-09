@@ -26,5 +26,38 @@ void main() {
       expect(game.debugBuild('라면'), isTrue);
       expect(game.debugBuild('주차'), isTrue);
     });
+
+    test('인접 잠긴 플롯을 해금하면 비용이 차감되고 열린다', () async {
+      final game = await newGame();
+      game.debugMoney = 1000000;
+      final target = game.debugFirstAdjacentLockedPlot();
+      expect(target, isNotNull);
+      final before = game.debugUnlockedPlotCount;
+      final money = game.debugMoney;
+      expect(game.unlockPlot(target!), isTrue);
+      expect(game.debugUnlockedPlotCount, before + 1);
+      expect(game.debugMoney, lessThan(money));
+    });
+
+    test('두 번째 해금은 첫 번째보다 비싸다(점증)', () async {
+      final game = await newGame();
+      game.debugMoney = 1000000;
+      final first = game.debugFirstAdjacentLockedPlot()!;
+      final m0 = game.debugMoney;
+      game.unlockPlot(first);
+      final cost1 = m0 - game.debugMoney;
+      final second = game.debugFirstAdjacentLockedPlot()!;
+      final m1 = game.debugMoney;
+      game.unlockPlot(second);
+      final cost2 = m1 - game.debugMoney;
+      expect(cost2, greaterThan(cost1));
+    });
+
+    test('잔액 부족 해금은 거부된다', () async {
+      final game = await newGame();
+      game.debugMoney = 0;
+      final target = game.debugFirstAdjacentLockedPlot()!;
+      expect(game.unlockPlot(target), isFalse);
+    });
   });
 }

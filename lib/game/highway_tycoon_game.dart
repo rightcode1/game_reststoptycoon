@@ -119,6 +119,10 @@ class HighwayTycoonGame extends FlameGame {
   /// 오늘 정체로 놓친 손님(차량) 수 — HUD 정체 경고가 구독.
   final ValueNotifier<int> congestion = ValueNotifier<int>(0);
 
+  /// 잠긴 부지 탭 → UI 해금 다이얼로그 요청(플롯키·비용). 없으면 null.
+  final ValueNotifier<LandUnlockRequest?> landUnlockRequest =
+      ValueNotifier<LandUnlockRequest?>(null);
+
   /// 최초 실행(또는 튜토리얼 미완료) 시 true — UI가 튜토리얼을 띄운다.
   final ValueNotifier<bool> tutorialRequested = ValueNotifier<bool>(false);
   bool _tutorialSeen = false;
@@ -697,6 +701,25 @@ class HighwayTycoonGame extends FlameGame {
   /// 배치 모드가 아닐 때의 맵 탭: 배치된 매장이면 업그레이드 요청을 발행한다.
   void _handleStoreTap(Offset screenPoint) {
     final worldPoint = _screenToWorld(screenPoint, _zoom);
+
+    // 잠긴 부지 탭이면 해금 흐름으로 라우팅한다(잠긴 타일엔 매장이 없다).
+    for (final tile in _tiles) {
+      if (!tile.path.contains(worldPoint)) {
+        continue;
+      }
+      if (tile.logicalY < entryRoadStartY && !_isPlotUnlocked(tile)) {
+        final key = _plotKeyForTile(tile);
+        if (_isPlotAdjacentToUnlocked(key)) {
+          landUnlockRequest.value =
+              LandUnlockRequest(plotKey: key, cost: _currentLandUnlockCost());
+        } else {
+          notice.value = '인접한 구역만 해금할 수 있습니다';
+        }
+        return;
+      }
+      break;
+    }
+
     for (final entry in _placedTiles.entries) {
       final tile = _tileByNumber[entry.key];
       if (tile == null || !tile.path.contains(worldPoint)) {
@@ -992,6 +1015,17 @@ class HighwayTycoonGame extends FlameGame {
     for (var i = 0; i < total; i++) {
       _unlockedPlots.add(i);
     }
+  }
+
+  @visibleForTesting
+  int? debugFirstAdjacentLockedPlot() {
+    final total = _plotsPerRow * (mapRows ~/ Balance.landPlotSize);
+    for (var key = 0; key < total; key++) {
+      if (!_unlockedPlots.contains(key) && _isPlotAdjacentToUnlocked(key)) {
+        return key;
+      }
+    }
+    return null;
   }
 
   /// 지정한 타일에 [itemName]을 건설한다. 테스트 전용.
@@ -1498,6 +1532,49 @@ class HighwayTycoonGame extends FlameGame {
 
   bool _isPlotUnlocked(MapTile tile) =>
       _unlockedPlots.contains(_plotKeyForTile(tile));
+
+  bool _isPlotAdjacentToUnlocked(int plotKey) {
+    final px = plotKey ~/ _plotsPerRow;
+    final py = plotKey % _plotsPerRow;
+    final rows = mapRows ~/ Balance.landPlotSize;
+    const deltas = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    for (final d in deltas) {
+      final nx = px + d.$1;
+      final ny = py + d.$2;
+      if (nx < 0 || nx >= _plotsPerRow || ny < 0 || ny >= rows) {
+        continue;
+      }
+      if (_unlockedPlots.contains(nx * _plotsPerRow + ny)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  int _currentLandUnlockCost() => Balance.landUnlockCost(
+        _unlockedPlots.length - _startingUnlockedPlots().length,
+      );
+
+  /// 플롯을 해금한다. 인접·잔액 조건을 만족하면 true.
+  bool unlockPlot(int plotKey) {
+    if (_unlockedPlots.contains(plotKey) ||
+        !_isPlotAdjacentToUnlocked(plotKey)) {
+      return false;
+    }
+    final cost = _currentLandUnlockCost();
+    if (_money < cost) {
+      notice.value = '잔액이 부족합니다 — 부지 해금에 ${_formatNumber(cost)}원 필요';
+      _playSound(GameSound.error);
+      return false;
+    }
+    _money -= cost;
+    moneyLabel.value = _formatMoney(_money);
+    _unlockedPlots.add(plotKey);
+    notice.value = '부지를 해금했습니다 (-${_formatNumber(cost)}원)';
+    _playSound(GameSound.build);
+    unawaited(saveNow());
+    return true;
+  }
 
   /// 기능적 시작 영역(초기 상업 2147 + 기본 주차 2092·2121)을 덮는 플롯.
   Set<int> _startingUnlockedPlots() {
@@ -2652,6 +2729,14 @@ class StoreUpgradeRequest {
 
   /// 다음 직원 고용 비용. 최대 인원이면 null.
   final int? staffHireCost;
+}
+
+/// 잠긴 부지 탭 시 UI에 전달되는 해금 요청 정보.
+class LandUnlockRequest {
+  const LandUnlockRequest({required this.plotKey, required this.cost});
+
+  final int plotKey;
+  final int cost;
 }
 
 class DailyArrival {
