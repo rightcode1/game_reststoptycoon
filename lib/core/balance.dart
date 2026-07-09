@@ -43,6 +43,10 @@ abstract final class Balance {
   /// 대기열에서 버티다 포기하고 통과 차량으로 전환되는 시간(게임 분).
   static const int queueGiveUpMinutes = 60;
 
+  /// 이동해야 할(대기열 제외) 차량이 이만큼 게임 분 동안 한 발도 못 나아가면
+  /// 교착으로 보고 강제 정리해 코리도 흐름을 되살린다. 영구 gridlock 방지.
+  static const int gridlockGiveUpMinutes = 30;
+
   /// 시작 평판(0~100).
   static const double reputationStart = 70;
 

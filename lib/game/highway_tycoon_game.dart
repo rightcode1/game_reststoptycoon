@@ -961,6 +961,21 @@ class HighwayTycoonGame extends FlameGame {
   VehicleDemandRange debugDailyDemandRange(VehicleType type) =>
       _dailyDemandRange(type);
 
+  @visibleForTesting
+  int get debugVehicleCount => _vehicles.length;
+
+  @visibleForTesting
+  Map<String, int> get debugVehicleStateCounts {
+    final counts = <String, int>{};
+    for (final vehicle in _vehicles) {
+      counts[vehicle.state.name] = (counts[vehicle.state.name] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  @visibleForTesting
+  int get debugPendingArrivalCount => _dailyArrivals.length;
+
   /// 지정한 타일에 [itemName]을 건설한다. 테스트 전용.
   @visibleForTesting
   bool debugBuildAt(int tileNumber, String itemName) {
@@ -1703,6 +1718,7 @@ class HighwayTycoonGame extends FlameGame {
   void _updateVehicles(double dt) {
     final completed = <MovingVehicle>[];
     for (final vehicle in _vehicles) {
+      vehicle.lastProgressMinute ??= _elapsedGameMinutes;
       if (vehicle.state == VehicleState.parked) {
         if (_elapsedGameMinutes >= vehicle.parkUntilMinute) {
           _people.removeWhere((person) => person.vehicleId == vehicle.id);
@@ -1732,6 +1748,7 @@ class HighwayTycoonGame extends FlameGame {
         continue;
       }
 
+      final before = vehicle.position;
       final target = vehicle.route.first;
       final delta = target - vehicle.position;
       final maxStep = vehicle.type.speed * dt;
@@ -1746,6 +1763,17 @@ class HighwayTycoonGame extends FlameGame {
         if (!_isVehicleBlocked(vehicle, nextPosition)) {
           vehicle.position = nextPosition;
         }
+      }
+
+      if (vehicle.position != before) {
+        vehicle.lastProgressMinute = _elapsedGameMinutes;
+      } else if (vehicle.state != VehicleState.queueing &&
+          _elapsedGameMinutes - vehicle.lastProgressMinute! >=
+              Balance.gridlockGiveUpMinutes) {
+        // 교착 해소: 대기열이 아닌데 오래 못 나아간 차량을 강제 정리해
+        // 코리도 흐름을 되살린다. 예약 슬롯이 있으면 반납한다.
+        vehicle.parkingSlot?.reservedBy = null;
+        completed.add(vehicle);
       }
     }
 
@@ -2171,6 +2199,7 @@ class HighwayTycoonGame extends FlameGame {
           Balance.queueGiveUpMinutes) {
         vehicle.route = _queuePassThroughRoute();
         vehicle.state = VehicleState.passingThrough;
+        vehicle.lastProgressMinute = _elapsedGameMinutes;
         _registerLostVehicle(vehicle.position);
         vehicle.queueTileNumber = null;
         vehicle.queueLane = null;
@@ -2293,6 +2322,7 @@ class HighwayTycoonGame extends FlameGame {
     frontVehicle.route =
         _routeFromQueueToParking(frontVehicle.queueTileNumber!, slot);
     frontVehicle.state = VehicleState.arriving;
+    frontVehicle.lastProgressMinute = _elapsedGameMinutes;
     frontVehicle.queueTileNumber = null;
     frontVehicle.queueLane = null;
   }
@@ -2631,6 +2661,10 @@ class MovingVehicle {
   double queueStartMinute;
   int? queueTileNumber;
   QueueLane? queueLane;
+
+  /// 마지막으로 위치가 전진한 게임 분. 대기열 제외 상태에서 이 값이
+  /// 오래 갱신되지 않으면 교착으로 간주해 강제 정리한다. null이면 첫 업데이트에서 초기화.
+  double? lastProgressMinute;
 }
 
 class WalkingPerson {
