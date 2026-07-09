@@ -64,5 +64,26 @@ void main() {
       game.debugRegisterLostVehicle();
       expect(game.debugLostToday, 2);
     });
+
+    test('평판이 높을수록 일일 유입 범위가 커진다', () async {
+      final game = await createGame();
+
+      game.debugReputation = 100;
+      final high = game.debugDailyDemandRange(VehicleType.sedan);
+
+      game.debugReputation = 0;
+      final low = game.debugDailyDemandRange(VehicleType.sedan);
+
+      expect(high.max, greaterThan(low.max));
+      // 매장이 없을 때 세단 기본 min은 12 → 평판 100이면 12×1.2.
+      expect(
+        high.min,
+        closeTo(Balance.sedanDailyBase.min * Balance.demandFactorMax, 1e-6),
+      );
+      expect(
+        low.min,
+        closeTo(Balance.sedanDailyBase.min * Balance.demandFactorMin, 1e-6),
+      );
+    });
   });
 }

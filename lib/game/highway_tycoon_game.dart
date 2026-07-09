@@ -946,6 +946,10 @@ class HighwayTycoonGame extends FlameGame {
   @visibleForTesting
   void debugRegisterLostVehicle() => _registerLostVehicle(Offset.zero);
 
+  @visibleForTesting
+  VehicleDemandRange debugDailyDemandRange(VehicleType type) =>
+      _dailyDemandRange(type);
+
   /// 지정한 타일에 [itemName]을 건설한다. 테스트 전용.
   @visibleForTesting
   bool debugBuildAt(int tileNumber, String itemName) {
@@ -1542,9 +1546,10 @@ class HighwayTycoonGame extends FlameGame {
       VehicleType.truck => Balance.truckDailyBase,
       VehicleType.bus => Balance.busDailyBase,
     };
+    final factor = Balance.demandFactor(_reputation);
     return VehicleDemandRange(
-      min: base.min + modifier.min,
-      max: base.max + modifier.max,
+      min: (base.min + modifier.min) * factor,
+      max: (base.max + modifier.max) * factor,
     );
   }
 
