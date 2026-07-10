@@ -59,6 +59,7 @@ class GameSaveData {
     this.tutorialSeen = true,
     this.reputation = defaultReputation,
     this.unlockedPlots,
+    this.clearedTrees,
   });
 
   factory GameSaveData.fromJson(Map<String, dynamic> json) {
@@ -84,6 +85,10 @@ class GameSaveData {
       unlockedPlots: (json['unlockedPlots'] as List<dynamic>?)
           ?.map((e) => e as int)
           .toList(),
+      // v8 이하 저장에는 없다 → null(치운 나무 없음).
+      clearedTrees: (json['clearedTrees'] as List<dynamic>?)
+          ?.map((e) => e as int)
+          .toList(),
     );
   }
 
@@ -94,7 +99,8 @@ class GameSaveData {
   /// v5 → v6: tutorialSeen 추가 (없으면 true — 기존 유저는 생략).
   /// v6 → v7: reputation 추가 (없으면 defaultReputation).
   /// v7 → v8: unlockedPlots 추가 (없으면 게임이 전체 개방으로 마이그레이션).
-  static const int currentVersion = 8;
+  /// v8 → v9: clearedTrees 추가 (없으면 치운 나무 없음).
+  static const int currentVersion = 9;
 
   /// reputation 미보유 저장의 기본 평판.
   static const double defaultReputation = 70;
@@ -122,6 +128,9 @@ class GameSaveData {
   /// 해금된 부지 플롯키 목록. null이면 구버전(전체 개방으로 처리).
   final List<int>? unlockedPlots;
 
+  /// 치운(제거한) 나무 타일 번호 목록. null이면 없음.
+  final List<int>? clearedTrees;
+
   Map<String, dynamic> toJson() => {
         'version': version,
         'money': money,
@@ -133,6 +142,7 @@ class GameSaveData {
         'tutorialSeen': tutorialSeen,
         'reputation': reputation,
         if (unlockedPlots != null) 'unlockedPlots': unlockedPlots,
+        if (clearedTrees != null) 'clearedTrees': clearedTrees,
       };
 }
 

@@ -57,6 +57,9 @@ abstract final class Balance {
   static int landUnlockCost(int unlockedBeyondStart) =>
       landUnlockBaseCost * (unlockedBeyondStart + 1);
 
+  /// 나무 1그루 치우기(공지 정리) 비용.
+  static const int treeClearCost = 500;
+
   /// 시작 평판(0~100).
   static const double reputationStart = 70;
 

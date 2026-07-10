@@ -123,6 +123,10 @@ class HighwayTycoonGame extends FlameGame {
   final ValueNotifier<LandUnlockRequest?> landUnlockRequest =
       ValueNotifier<LandUnlockRequest?>(null);
 
+  /// 나무 탭 → UI 치우기 다이얼로그 요청(타일번호·비용). 없으면 null.
+  final ValueNotifier<TreeClearRequest?> treeClearRequest =
+      ValueNotifier<TreeClearRequest?>(null);
+
   /// 최초 실행(또는 튜토리얼 미완료) 시 true — UI가 튜토리얼을 띄운다.
   final ValueNotifier<bool> tutorialRequested = ValueNotifier<bool>(false);
   bool _tutorialSeen = false;
@@ -169,6 +173,7 @@ class HighwayTycoonGame extends FlameGame {
   double _reputation = Balance.reputationStart;
   int _lostToday = 0;
   final Set<int> _unlockedPlots = <int>{};
+  final Set<int> _clearedTrees = <int>{};
   int _money = Balance.startingMoney;
   int _nextVehicleId = 1;
   int _nextPersonId = 1;
@@ -232,6 +237,8 @@ class HighwayTycoonGame extends FlameGame {
     _unlockedPlots
       ..clear()
       ..addAll(_startingUnlockedPlots());
+    _treeTileNumbers.addAll(_clearedTrees);
+    _clearedTrees.clear();
 
     _questIndex = 0;
     for (final metric in QuestMetric.values) {
@@ -393,6 +400,13 @@ class HighwayTycoonGame extends FlameGame {
       _unlockAllPlots();
     }
 
+    if (data.clearedTrees != null) {
+      _clearedTrees
+        ..clear()
+        ..addAll(data.clearedTrees!);
+      _treeTileNumbers.removeAll(_clearedTrees);
+    }
+
     _reputation = data.reputation;
     reputation.value = _reputation;
 
@@ -500,6 +514,7 @@ class HighwayTycoonGame extends FlameGame {
       tutorialSeen: _tutorialSeen,
       reputation: _reputation,
       unlockedPlots: _unlockedPlots.toList(),
+      clearedTrees: _clearedTrees.toList(),
       placedTiles: [
         for (final entry in _placedTiles.entries)
           PlacedTileSave(
@@ -725,6 +740,14 @@ class HighwayTycoonGame extends FlameGame {
         } else {
           notice.value = '인접한 구역만 해금할 수 있습니다';
         }
+        return;
+      }
+      // 해금된 부지의 나무는 치우기 흐름으로.
+      if (_treeTileNumbers.contains(tile.tileNumber)) {
+        treeClearRequest.value = TreeClearRequest(
+          tileNumber: tile.tileNumber,
+          cost: Balance.treeClearCost,
+        );
         return;
       }
       break;
@@ -1021,6 +1044,19 @@ class HighwayTycoonGame extends FlameGame {
 
   @visibleForTesting
   void debugUnlockAllPlots() => _unlockAllPlots();
+
+  @visibleForTesting
+  bool debugIsTree(int tileNumber) => _treeTileNumbers.contains(tileNumber);
+
+  @visibleForTesting
+  int? debugFirstClearableTree() {
+    for (final tile in _tiles) {
+      if (_treeTileNumbers.contains(tile.tileNumber) && _isPlotUnlocked(tile)) {
+        return tile.tileNumber;
+      }
+    }
+    return null;
+  }
 
   @visibleForTesting
   int? debugFirstAdjacentLockedPlot() {
@@ -1572,6 +1608,30 @@ class HighwayTycoonGame extends FlameGame {
     for (var i = 0; i < total; i++) {
       _unlockedPlots.add(i);
     }
+  }
+
+  /// 나무(공지)를 치운다. 해금된 부지의 나무이고 잔액이 충분하면 true.
+  bool clearTree(int tileNumber) {
+    final tile = _tileByNumber[tileNumber];
+    if (tile == null ||
+        !_treeTileNumbers.contains(tileNumber) ||
+        !_isPlotUnlocked(tile)) {
+      return false;
+    }
+    if (_money < Balance.treeClearCost) {
+      notice.value =
+          '잔액이 부족합니다 — 나무 치우기에 ${_formatNumber(Balance.treeClearCost)}원 필요';
+      _playSound(GameSound.error);
+      return false;
+    }
+    _money -= Balance.treeClearCost;
+    moneyLabel.value = _formatMoney(_money);
+    _treeTileNumbers.remove(tileNumber);
+    _clearedTrees.add(tileNumber);
+    notice.value = '나무를 치웠습니다 (-${_formatNumber(Balance.treeClearCost)}원)';
+    _playSound(GameSound.build);
+    unawaited(saveNow());
+    return true;
   }
 
   /// 플롯을 해금한다. 인접·잔액 조건을 만족하면 true.
@@ -2755,6 +2815,14 @@ class LandUnlockRequest {
   const LandUnlockRequest({required this.plotKey, required this.cost});
 
   final int plotKey;
+  final int cost;
+}
+
+/// 나무 탭 시 UI에 전달되는 치우기 요청 정보.
+class TreeClearRequest {
+  const TreeClearRequest({required this.tileNumber, required this.cost});
+
+  final int tileNumber;
   final int cost;
 }
 

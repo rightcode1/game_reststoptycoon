@@ -27,6 +27,7 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp>
     _game.notice.addListener(_onNotice);
     _game.upgradeRequest.addListener(_onUpgradeRequest);
     _game.landUnlockRequest.addListener(_onLandUnlockRequest);
+    _game.treeClearRequest.addListener(_onTreeClearRequest);
     _game.offlineEarnings.addListener(_onOfflineEarnings);
     _game.tutorialRequested.addListener(_onTutorialRequested);
     WidgetsBinding.instance.addObserver(this);
@@ -43,6 +44,7 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp>
     _game.notice.removeListener(_onNotice);
     _game.upgradeRequest.removeListener(_onUpgradeRequest);
     _game.landUnlockRequest.removeListener(_onLandUnlockRequest);
+    _game.treeClearRequest.removeListener(_onTreeClearRequest);
     _game.offlineEarnings.removeListener(_onOfflineEarnings);
     _game.tutorialRequested.removeListener(_onTutorialRequested);
     _game.timeLabel.dispose();
@@ -51,6 +53,7 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp>
     _game.pendingPlacementLabel.dispose();
     _game.upgradeRequest.dispose();
     _game.landUnlockRequest.dispose();
+    _game.treeClearRequest.dispose();
     _game.offlineEarnings.dispose();
     _game.questLabel.dispose();
     _game.reputation.dispose();
@@ -228,6 +231,48 @@ class _RestStopTycoonAppState extends State<RestStopTycoonApp>
               Navigator.of(dialogContext).pop();
             },
             child: const Text('해금'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onTreeClearRequest() {
+    final request = _game.treeClearRequest.value;
+    if (request == null) {
+      return;
+    }
+    _game.treeClearRequest.value = null;
+    final context = _navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF2A2218),
+        title: const Text(
+          '나무 치우기',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          '이 나무를 ${request.cost}원에 치울까요?',
+          style: const TextStyle(
+            color: Color(0xFFE7D7B7),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              _game.clearTree(request.tileNumber);
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('치우기'),
           ),
         ],
       ),

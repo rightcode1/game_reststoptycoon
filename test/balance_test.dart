@@ -116,5 +116,9 @@ void main() {
       expect(Balance.landUnlockCost(1), greaterThan(Balance.landUnlockCost(0)));
       expect(Balance.landUnlockCost(0), Balance.landUnlockBaseCost);
     });
+
+    test('나무 치우기 비용은 양수다', () {
+      expect(Balance.treeClearCost, greaterThan(0));
+    });
   });
 }
