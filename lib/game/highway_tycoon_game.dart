@@ -174,6 +174,7 @@ class HighwayTycoonGame extends FlameGame {
   int _lostToday = 0;
   final Set<int> _unlockedPlots = <int>{};
   final Set<int> _clearedTrees = <int>{};
+  final Set<int> _unreachableStoreAnchors = <int>{};
   int _money = Balance.startingMoney;
   int _nextVehicleId = 1;
   int _nextPersonId = 1;
@@ -199,6 +200,7 @@ class HighwayTycoonGame extends FlameGame {
     }
     _updateQuestLabel();
     _rebuildTrafficPlan(force: true);
+    _recomputeStoreReachability();
   }
 
   /// 튜토리얼 완료 처리(다시 표시하지 않도록 저장).
@@ -919,6 +921,11 @@ class HighwayTycoonGame extends FlameGame {
     } else if (_isStore(itemName)) {
       _bumpQuestStat(QuestMetric.storesBuilt);
     }
+    _recomputeStoreReachability();
+    if (_isStore(itemName) &&
+        _unreachableStoreAnchors.contains(footprint.first)) {
+      notice.value = '⚠ 이 매장은 손님이 닿지 못합니다 — 통로를 확보하세요';
+    }
     unawaited(saveNow());
     return true;
   }
@@ -1047,6 +1054,21 @@ class HighwayTycoonGame extends FlameGame {
 
   @visibleForTesting
   bool debugIsTree(int tileNumber) => _treeTileNumbers.contains(tileNumber);
+
+  @visibleForTesting
+  bool debugIsStoreReachable(int anchorTileNumber) =>
+      _isStoreReachable(anchorTileNumber);
+
+  @visibleForTesting
+  Set<int> get debugUnreachableStoreAnchors => _unreachableStoreAnchors;
+
+  @visibleForTesting
+  List<int> debugStoreFrontTiles(int anchorTileNumber) {
+    final placed = _placedTiles[anchorTileNumber];
+    return placed == null
+        ? const []
+        : _storeFrontTiles(anchorTileNumber, placed.label);
+  }
 
   @visibleForTesting
   int? debugFirstClearableTree() {
@@ -1314,6 +1336,20 @@ class HighwayTycoonGame extends FlameGame {
       final placedData = _placedTiles[tile.tileNumber];
       final specialLabel = _specialLabelFor(tile);
       if (placedData != null && placedData.showLabel) {
+        // 손님이 닿지 못하는 고립 매장은 빨간 경고로 표시한다.
+        if (_unreachableStoreAnchors.contains(tile.tileNumber)) {
+          canvas.drawPath(
+            tile.path,
+            Paint()..color = const Color(0x55E53935),
+          );
+          canvas.drawPath(
+            tile.path,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2
+              ..color = const Color(0xFFE53935),
+          );
+        }
         _drawSpecialLabel(
           canvas,
           tile,
@@ -1630,6 +1666,7 @@ class HighwayTycoonGame extends FlameGame {
     _clearedTrees.add(tileNumber);
     notice.value = '나무를 치웠습니다 (-${_formatNumber(Balance.treeClearCost)}원)';
     _playSound(GameSound.build);
+    _recomputeStoreReachability();
     unawaited(saveNow());
     return true;
   }
@@ -2166,6 +2203,43 @@ class HighwayTycoonGame extends FlameGame {
       }
     }
     return plans;
+  }
+
+  /// 매장 앵커가 어느 주차 슬롯에서든 보행자가 닿을 수 있으면 true.
+  /// (앞 타일이 다른 건물로 완전히 막히면 false — 손님이 못 온다)
+  bool _isStoreReachable(int anchorTileNumber) {
+    final placed = _placedTiles[anchorTileNumber];
+    if (placed == null || !Balance.storeSpecs.containsKey(placed.label)) {
+      return false;
+    }
+    final fronts = _storeFrontTiles(anchorTileNumber, placed.label);
+    for (final slot in _parkingSlots) {
+      for (final frontTile in fronts) {
+        final path = _findPedestrianRouteToCommercial(
+          startTileNumber: slot.spotTileNumber,
+          targetTileNumber: frontTile,
+        );
+        if (path != null && path.length >= 2) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// 손님이 닿지 못하는(고립된) 매장 앵커 집합을 다시 계산한다.
+  /// 배치/철거/부지 변화 등 보행 접근성이 바뀔 수 있는 시점에 호출.
+  void _recomputeStoreReachability() {
+    _unreachableStoreAnchors.clear();
+    for (final entry in _placedTiles.entries) {
+      if (!entry.value.showLabel ||
+          !Balance.storeSpecs.containsKey(entry.value.label)) {
+        continue;
+      }
+      if (!_isStoreReachable(entry.key)) {
+        _unreachableStoreAnchors.add(entry.key);
+      }
+    }
   }
 
   /// 매장 발자국(앵커 + 아래 타일)에 인접한 보행 가능 타일 목록.
