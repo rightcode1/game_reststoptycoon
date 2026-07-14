@@ -20,6 +20,12 @@ enum QuestMetric {
 
   /// 확장한 주차 슬롯 수.
   parkingBuilt,
+
+  /// 해금한 부지 구역 수.
+  landUnlocked,
+
+  /// 치운 나무 수.
+  treeCleared,
 }
 
 class QuestSpec {
@@ -100,5 +106,17 @@ const List<QuestSpec> questLine = [
     metric: QuestMetric.salesCount,
     target: 120,
     reward: 5000,
+  ),
+  QuestSpec(
+    description: '나무를 3그루 치우세요',
+    metric: QuestMetric.treeCleared,
+    target: 3,
+    reward: 1000,
+  ),
+  QuestSpec(
+    description: '부지를 3구역 해금하세요',
+    metric: QuestMetric.landUnlocked,
+    target: 3,
+    reward: 3000,
   ),
 ];

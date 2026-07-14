@@ -1666,6 +1666,7 @@ class HighwayTycoonGame extends FlameGame {
     _clearedTrees.add(tileNumber);
     notice.value = '나무를 치웠습니다 (-${_formatNumber(Balance.treeClearCost)}원)';
     _playSound(GameSound.build);
+    _bumpQuestStat(QuestMetric.treeCleared);
     _recomputeStoreReachability();
     unawaited(saveNow());
     return true;
@@ -1688,6 +1689,7 @@ class HighwayTycoonGame extends FlameGame {
     _unlockedPlots.add(plotKey);
     notice.value = '부지를 해금했습니다 (-${_formatNumber(cost)}원)';
     _playSound(GameSound.build);
+    _bumpQuestStat(QuestMetric.landUnlocked);
     unawaited(saveNow());
     return true;
   }

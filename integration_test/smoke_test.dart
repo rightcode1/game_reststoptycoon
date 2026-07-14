@@ -16,9 +16,9 @@ import 'package:reststop_tycoon/game/highway_tycoon_game.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  /// 최초 실행 튜토리얼(3장)을 넘긴다. 저장을 비운 시나리오는 전부 필요.
+  /// 최초 실행 튜토리얼(4장)을 넘긴다. 저장을 비운 시나리오는 전부 필요.
   Future<void> dismissTutorial(WidgetTester tester) async {
-    for (var i = 0; i < 2; i++) {
+    for (var i = 0; i < 3; i++) {
       await tester.tap(find.text('다음'));
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -26,17 +26,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  testWidgets('최초 실행 → 튜토리얼 3장 → 완료 후 재실행 시 생략', (tester) async {
+  testWidgets('최초 실행 → 튜토리얼 4장 → 완료 후 재실행 시 생략', (tester) async {
     await SaveRepository().clear();
 
     await tester.pumpWidget(const RestStopTycoonApp());
     await tester.pump(const Duration(seconds: 1));
 
-    // 1장: 환영 → 2장 → 3장 → 시작하기
+    // 1장: 환영 → 건설하기 → 확장하기 → 키우기 → 시작하기
     expect(find.textContaining('환영합니다'), findsOneWidget);
     await tester.tap(find.text('다음'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('건설하기'), findsOneWidget);
+    await tester.tap(find.text('다음'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('확장하기'), findsOneWidget);
     await tester.tap(find.text('다음'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('키우기'), findsOneWidget);

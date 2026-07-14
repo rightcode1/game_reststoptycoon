@@ -130,4 +130,23 @@ void main() {
       expect(game.questLabel.value, isNull);
     });
   });
+
+  group('확장 퀘스트 지표', () {
+    test('부지 해금이 landUnlocked 지표를 올린다', () async {
+      final game = await createGame();
+      game.debugMoney = 1000000;
+      final target = game.debugFirstAdjacentLockedPlot()!;
+      expect(game.unlockPlot(target), isTrue);
+      expect(game.debugQuestStats[QuestMetric.landUnlocked], 1);
+    });
+
+    test('나무 치우기가 treeCleared 지표를 올린다', () async {
+      final game = await createGame();
+      game.debugUnlockAllPlots();
+      game.debugMoney = 1000000;
+      final tree = game.debugFirstClearableTree()!;
+      expect(game.clearTree(tree), isTrue);
+      expect(game.debugQuestStats[QuestMetric.treeCleared], 1);
+    });
+  });
 }
