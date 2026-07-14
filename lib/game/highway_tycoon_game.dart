@@ -1035,6 +1035,9 @@ class HighwayTycoonGame extends FlameGame {
   int get debugVehicleCount => _vehicles.length;
 
   @visibleForTesting
+  int get debugSalesCount => _questStats[QuestMetric.salesCount] ?? 0;
+
+  @visibleForTesting
   Map<String, int> get debugVehicleStateCounts {
     final counts = <String, int>{};
     for (final vehicle in _vehicles) {
